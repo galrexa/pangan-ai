@@ -1,0 +1,49 @@
+{
+  "feature_columns": [
+    "harga",
+    "tavg_final",
+    "rh_avg_final",
+    "ff_avg_final",
+    "month_sin",
+    "month_cos",
+    "day_sin",
+    "day_cos",
+    "is_weekend",
+    "dum_ramadan",
+    "dum_idulfitri",
+    "dum_natal_newyr",
+    "tavg_flag",
+    "rh_avg_flag",
+    "ff_avg_flag",
+    "imputasi_flag",
+    "harga_lag_1",
+    "harga_lag_3",
+    "harga_lag_7",
+    "harga_lag_14",
+    "harga_rolling_mean_7",
+    "harga_rolling_std_7",
+    "harga_rolling_mean_14",
+    "harga_rolling_std_14",
+    "harga_rolling_mean_30",
+    "harga_rolling_std_30",
+    "harga_change_1d",
+    "harga_change_7d"
+  ],
+  "model_architecture": {
+    "sequence_length": 30,
+    "prediction_horizon": 7,
+    "n_features": 28
+  },
+  "training_metadata": {
+    "commodities": [
+      "Cabai Rawit Merah"
+    ],
+    "regions": [
+      "Kabupaten Bogor",
+      "Kabupaten Cirebon",
+      "Kabupaten Majalengka",
+      "Kota Bandung"
+    ],
+    "total_samples": 5916
+  }
+}
