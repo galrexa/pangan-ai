@@ -2,8 +2,8 @@ from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
 import logging
 import numpy as np
-from models.lstm_model import LSTMPredictor
-from models.data_processor import DataProcessor
+from data.models.lstm_model import LSTMPredictor
+from data.models.data_processor import DataProcessor
 from services.data_service import DataService
 from config.settings import settings
 

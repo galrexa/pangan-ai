@@ -2,7 +2,14 @@ import pandas as pd
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime, date
 import logging
-from models.data_processor import DataProcessor
+import sys
+from pathlib import Path
+
+# Fix import path untuk DataProcessor
+current_dir = Path(__file__).parent.parent  # backend directory
+sys.path.insert(0, str(current_dir))
+
+from data.models.data_processor import DataProcessor
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
