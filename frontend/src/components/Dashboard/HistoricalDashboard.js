@@ -40,98 +40,68 @@ const HistoricalDashboard = () => {
     setError(null);
 
     try {
-      // Fetch historical data
-      const response = await apiService.getHistoricalData(filters);
-      const rawData = response.data;
+      const response = await apiService.getHistoricalData({
+        ...filters,
+        limit: 50, // LIMIT DATA untuk test performa
+      });
 
-      // Process and parse data
-      const processedData = rawData.map(parseDataRow);
+      const apiData = response.data;
+      const rawData = apiData.data || apiData;
 
-      // Extract price data
-      const priceData = processedData.map((item) => ({
-        date: item.date,
-        price: item.price.value,
-        region: item.region,
-        commodity: item.price.commodity,
-        level: item.price.level,
+      if (!Array.isArray(rawData)) {
+        console.warn("Data bukan array");
+        setData({
+          priceData: [],
+          weatherData: [],
+          correlationData: [],
+          statistics: {
+            current_price: 0,
+            avg_price: 0,
+            min_price: 0,
+            max_price: 0,
+            price_volatility: 0,
+          },
+          weatherStats: { temperature: 0, condition: "N/A" },
+          eventStats: { active_events: [] },
+        });
+        return;
+      }
+
+      // SIMPLE processing - no parseDataRow
+      const priceData = rawData.slice(0, 50).map((item) => ({
+        date: item.tanggal,
+        price: item.harga || 0,
+        region: item.wilayah || "Unknown",
+        commodity: item.komoditas || "Unknown",
       }));
 
-      // Extract weather data if enabled
-      const weatherData = filters.include_weather
-        ? processedData.map((item) => ({
-            date: item.date,
-            temperature: item.weather.temperature,
-            humidity: item.weather.humidity,
-            rainfall: item.weather.rainfall,
-            windSpeed: item.weather.windSpeed,
-          }))
-        : [];
-
-      // Extract active events
-      const events = [];
-      if (filters.include_events) {
-        processedData.forEach((item) => {
-          if (item.events.ramadan) events.push("Ramadan");
-          if (item.events.idulFitri) events.push("Idul Fitri");
-          if (item.events.christmasNewYear) events.push("Natal & Tahun Baru");
-        });
-      }
-      const uniqueEvents = [...new Set(events)];
-
-      // Calculate statistics
-      const prices = priceData.map((d) => d.price);
+      // Simple stats
+      const prices = priceData.map((d) => d.price).filter((p) => p > 0);
       const statistics = {
         current_price: prices[prices.length - 1] || 0,
-        previous_price: prices[prices.length - 2] || 0,
         avg_price:
-          prices.reduce((sum, price) => sum + price, 0) / prices.length || 0,
-        min_price: Math.min(...prices) || 0,
-        max_price: Math.max(...prices) || 0,
-        price_volatility: calculateVolatility(prices),
+          prices.length > 0
+            ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length)
+            : 0,
+        min_price: prices.length > 0 ? Math.min(...prices) : 0,
+        max_price: prices.length > 0 ? Math.max(...prices) : 0,
+        price_volatility: 0,
+        data_points: prices.length,
       };
-
-      // Weather statistics
-      const weatherStats =
-        weatherData.length > 0
-          ? {
-              temperature: weatherData[weatherData.length - 1]?.temperature,
-              condition: getWeatherCondition(
-                weatherData[weatherData.length - 1]
-              ),
-            }
-          : {};
-
-      // Event statistics
-      const eventStats = {
-        active_events: uniqueEvents.map((event) => ({
-          name: event,
-          impact: Math.random() * 20 + 5, // Mock impact percentage
-        })),
-      };
-
-      // Mock correlation data (should come from backend)
-      const correlationData = [
-        { factor: "Suhu", correlation: 0.23 },
-        { factor: "Kelembaban", correlation: -0.15 },
-        { factor: "Curah Hujan", correlation: 0.08 },
-        { factor: "Kecepatan Angin", correlation: -0.05 },
-        { factor: "Event Ramadan", correlation: 0.35 },
-        { factor: "Event Idul Fitri", correlation: 0.42 },
-      ];
 
       setData({
         priceData,
-        weatherData,
-        correlationData,
+        weatherData: [], // Kosongkan untuk performance
+        correlationData: [],
         statistics,
-        weatherStats,
-        eventStats,
+        weatherStats: { temperature: 25, condition: "Normal" },
+        eventStats: { active_events: [] },
       });
 
-      setActiveEvents(uniqueEvents);
+      console.log(`✅ Data loaded: ${priceData.length} records`);
     } catch (err) {
-      console.error("Error loading data:", err);
-      setError("Gagal memuat data. Silakan coba lagi.");
+      console.error("Error:", err);
+      setError("Gagal memuat data");
     } finally {
       setLoading(false);
     }
@@ -197,8 +167,8 @@ const HistoricalDashboard = () => {
 
       <ChartContainer
         priceData={data.priceData}
-        weatherData={data.weatherData}
-        correlationData={data.correlationData}
+        weatherData={[]}
+        correlationData={[]}
         activeEvents={activeEvents}
         loading={loading}
         error={error}

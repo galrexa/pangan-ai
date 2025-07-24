@@ -7,27 +7,30 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  TextField,
   Button,
   Box,
-  Chip,
   Typography,
-  Switch,
-  FormControlLabel,
+  Chip,
+  TextField,
+  Alert,
+  Collapse,
+  OutlinedInput,
+  Checkbox,
+  ListItemText,
 } from "@mui/material";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import {
   FilterList,
-  Refresh,
-  CloudQueue,
   Event,
   TrendingUp,
+  Refresh,
+  DateRange,
+  ExpandMore,
+  ExpandLess,
 } from "@mui/icons-material";
 import dayjs from "dayjs";
-import { COMMODITIES, REGIONS, PRICE_LEVELS } from "../../utils/constants";
-import { getLastNDays } from "../../utils/helpers";
 
 const FilterPanel = ({
   filters,
@@ -35,38 +38,193 @@ const FilterPanel = ({
   loading,
   onApplyFilters,
   activeEvents = [],
-  weatherEnabled = true,
-  onWeatherToggle,
 }) => {
+  // DATASET MAXIMUM DATE - sesuai data terakhir di CSV
+  const DATASET_MAX_DATE = "2025-05-31";
+  const maxDate = dayjs(DATASET_MAX_DATE);
+
   const [localFilters, setLocalFilters] = useState(filters);
-  const { startDate, endDate } = getLastNDays(30);
+  const [showCustomDate, setShowCustomDate] = useState(false);
+  const [dateError, setDateError] = useState("");
+
+  const commodities = [
+    { value: "all", label: "Semua Komoditas" },
+    { value: "Cabai Rawit Merah", label: "Cabai Rawit Merah" },
+    { value: "Bawang Merah", label: "Bawang Merah" },
+    { value: "Cabai Merah Keriting", label: "Cabai Merah Keriting" },
+  ];
+
+  const regions = [
+    { value: "all", label: "Semua Wilayah" },
+    { value: "Kabupaten Bogor", label: "Kabupaten Bogor" },
+    { value: "Kabupaten Cirebon", label: "Kabupaten Cirebon" },
+    { value: "Kota Bandung", label: "Kota Bandung" },
+    { value: "Kabupaten Majalengka", label: "Kabupaten Majalengka" },
+  ];
+
+  // Enhanced date ranges dengan 1 tahun
+  const dateRanges = [
+    { value: 7, label: "7 Hari Terakhir" },
+    { value: 30, label: "30 Hari Terakhir" },
+    { value: 90, label: "3 Bulan Terakhir" },
+    { value: 180, label: "6 Bulan Terakhir" },
+    { value: 365, label: "1 Tahun Terakhir" },
+    { value: "custom", label: "Pilih Tanggal Custom" },
+  ];
 
   useEffect(() => {
     setLocalFilters(filters);
   }, [filters]);
 
+  const validateDateRange = (startDate, endDate) => {
+    if (!startDate || !endDate) return "";
+
+    const start = dayjs(startDate);
+    const end = dayjs(endDate);
+
+    if (start.isAfter(end)) {
+      return "Tanggal mulai tidak boleh lebih besar dari tanggal akhir";
+    }
+
+    if (end.isAfter(maxDate)) {
+      return `Tanggal akhir tidak boleh lebih dari ${DATASET_MAX_DATE}`;
+    }
+
+    const daysDiff = end.diff(start, "day");
+    if (daysDiff > 365) {
+      return "Rentang tanggal maksimal 1 tahun (365 hari)";
+    }
+
+    return "";
+  };
+
+  // AUTO APPLY - Trigger ketika filter berubah
   const handleFilterChange = (field, value) => {
     const newFilters = { ...localFilters, [field]: value };
     setLocalFilters(newFilters);
+
+    // Clear date error when filters change
+    if (field === "start_date" || field === "end_date") {
+      setDateError("");
+    }
+
+    // AUTO APPLY - Langsung trigger perubahan
+    onFiltersChange(newFilters);
+
+    // Small delay untuk debounce, lalu auto apply
+    setTimeout(() => {
+      onApplyFilters();
+    }, 300);
   };
 
-  const handleApply = () => {
-    onFiltersChange(localFilters);
-    onApplyFilters();
+  const handleDateRangeChange = (value) => {
+    if (value === "custom") {
+      setShowCustomDate(true);
+      const endDate = maxDate;
+      const startDate = maxDate.subtract(30, "day");
+
+      const newFilters = {
+        ...localFilters,
+        date_range: "custom",
+        start_date: startDate.format("YYYY-MM-DD"),
+        end_date: endDate.format("YYYY-MM-DD"),
+      };
+
+      setLocalFilters(newFilters);
+      onFiltersChange(newFilters);
+      setTimeout(() => onApplyFilters(), 300);
+    } else {
+      setShowCustomDate(false);
+
+      const days = parseInt(value);
+      const endDate = maxDate;
+      const startDate = maxDate.subtract(days, "day");
+
+      const newFilters = {
+        ...localFilters,
+        date_range: days,
+        start_date: startDate.format("YYYY-MM-DD"),
+        end_date: endDate.format("YYYY-MM-DD"),
+      };
+
+      setLocalFilters(newFilters);
+      onFiltersChange(newFilters);
+      setTimeout(() => onApplyFilters(), 300);
+    }
+    setDateError("");
+  };
+
+  const handleCustomDateChange = (field, newValue) => {
+    if (!newValue) return;
+
+    const newFilters = {
+      ...localFilters,
+      [field]: newValue.format("YYYY-MM-DD"),
+    };
+
+    setLocalFilters(newFilters);
+
+    const error = validateDateRange(newFilters.start_date, newFilters.end_date);
+    setDateError(error);
+
+    if (!error) {
+      onFiltersChange(newFilters);
+      setTimeout(() => onApplyFilters(), 300);
+    }
+  };
+
+  // MULTIPLE SELECT HANDLER untuk wilayah
+  const handleMultipleRegionChange = (event) => {
+    const value = event.target.value;
+    let selectedRegions = typeof value === "string" ? value.split(",") : value;
+
+    // Handle "Semua Wilayah" selection
+    if (selectedRegions.includes("all")) {
+      if (localFilters.wilayah && localFilters.wilayah.includes("all")) {
+        // If "all" was already selected, deselect it
+        selectedRegions = selectedRegions.filter((region) => region !== "all");
+      } else {
+        // If "all" is newly selected, select only "all"
+        selectedRegions = ["all"];
+      }
+    } else {
+      // If other options are selected while "all" is present, remove "all"
+      selectedRegions = selectedRegions.filter((region) => region !== "all");
+    }
+
+    // Ensure at least one option is selected
+    if (selectedRegions.length === 0) {
+      selectedRegions = ["all"];
+    }
+
+    handleFilterChange("wilayah", selectedRegions);
   };
 
   const handleReset = () => {
     const defaultFilters = {
       komoditas: "all",
-      wilayah: "all",
-      level_harga: "all",
-      start_date: startDate,
-      end_date: endDate,
-      include_weather: true,
+      wilayah: ["all"], // Array for multiple select
+      date_range: 30,
+      include_weather: false,
       include_events: true,
     };
+
     setLocalFilters(defaultFilters);
-    onFiltersChange(defaultFilters);
+    setShowCustomDate(false);
+    setDateError("");
+    handleDateRangeChange(30);
+  };
+
+  // Helper untuk render selected regions
+  const renderSelectedRegions = (selected) => {
+    if (!Array.isArray(selected)) return "Semua Wilayah";
+    if (selected.includes("all")) return "Semua Wilayah";
+    if (selected.length === 0) return "Pilih Wilayah";
+    if (selected.length === 1) {
+      const region = regions.find((r) => r.value === selected[0]);
+      return region ? region.label : selected[0];
+    }
+    return `${selected.length} wilayah dipilih`;
   };
 
   return (
@@ -79,7 +237,18 @@ const FilterPanel = ({
               Filter Data Historis
             </Typography>
 
-            {/* Active Events Indicators */}
+            {/* Dataset Info */}
+            <Box sx={{ ml: 2 }}>
+              <Chip
+                icon={<DateRange />}
+                label={`Data s/d ${DATASET_MAX_DATE}`}
+                size="small"
+                color="info"
+                variant="outlined"
+              />
+            </Box>
+
+            {/* Active Events Display */}
             <Box sx={{ ml: "auto", display: "flex", gap: 1 }}>
               {activeEvents.map((event) => (
                 <Chip
@@ -94,8 +263,8 @@ const FilterPanel = ({
             </Box>
           </Box>
 
-          <Grid container spacing={3}>
-            {/* Commodity Filter */}
+          <Grid container spacing={3} alignItems="center">
+            {/* Commodity Selection */}
             <Grid item xs={12} md={3}>
               <FormControl fullWidth>
                 <InputLabel>Komoditas</InputLabel>
@@ -106,181 +275,171 @@ const FilterPanel = ({
                   }
                   label="Komoditas"
                 >
-                  <MenuItem value="all">Semua Komoditas</MenuItem>
-                  {COMMODITIES.map((commodity) => (
-                    <MenuItem key={commodity.value} value={commodity.value}>
-                      {commodity.label}
+                  {commodities.map((item) => (
+                    <MenuItem key={item.value} value={item.value}>
+                      {item.label}
                     </MenuItem>
                   ))}
                 </Select>
               </FormControl>
             </Grid>
 
-            {/* Region Filter */}
+            {/* MULTIPLE Region Selection */}
             <Grid item xs={12} md={3}>
               <FormControl fullWidth>
                 <InputLabel>Wilayah</InputLabel>
                 <Select
-                  value={localFilters.wilayah || "all"}
-                  onChange={(e) =>
-                    handleFilterChange("wilayah", e.target.value)
+                  multiple
+                  value={
+                    Array.isArray(localFilters.wilayah)
+                      ? localFilters.wilayah
+                      : ["all"]
                   }
-                  label="Wilayah"
-                >
-                  {REGIONS.map((region) => (
-                    <MenuItem key={region.value} value={region.value}>
-                      {region.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-
-            {/* Price Level Filter */}
-            <Grid item xs={12} md={3}>
-              <FormControl fullWidth>
-                <InputLabel>Level Harga</InputLabel>
-                <Select
-                  value={localFilters.level_harga || "all"}
-                  onChange={(e) =>
-                    handleFilterChange("level_harga", e.target.value)
-                  }
-                  label="Level Harga"
-                >
-                  {PRICE_LEVELS.map((level) => (
-                    <MenuItem key={level.value} value={level.value}>
-                      {level.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-
-            {/* Quick Date Ranges */}
-            <Grid item xs={12} md={3}>
-              <FormControl fullWidth>
-                <InputLabel>Range Cepat</InputLabel>
-                <Select
-                  value=""
-                  onChange={(e) => {
-                    const days = parseInt(e.target.value);
-                    const { startDate: start, endDate: end } =
-                      getLastNDays(days);
-                    handleFilterChange("start_date", start);
-                    handleFilterChange("end_date", end);
+                  onChange={handleMultipleRegionChange}
+                  input={<OutlinedInput label="Wilayah" />}
+                  renderValue={renderSelectedRegions}
+                  MenuProps={{
+                    PaperProps: {
+                      style: {
+                        maxHeight: 300,
+                      },
+                    },
                   }}
-                  label="Range Cepat"
-                  displayEmpty
                 >
-                  <MenuItem value="">Pilih Range...</MenuItem>
-                  <MenuItem value={7}>7 Hari Terakhir</MenuItem>
-                  <MenuItem value={30}>30 Hari Terakhir</MenuItem>
-                  <MenuItem value={90}>3 Bulan Terakhir</MenuItem>
-                  <MenuItem value={365}>1 Tahun Terakhir</MenuItem>
+                  {regions.map((region) => {
+                    const isSelected = Array.isArray(localFilters.wilayah)
+                      ? localFilters.wilayah.includes(region.value)
+                      : localFilters.wilayah === region.value;
+
+                    return (
+                      <MenuItem key={region.value} value={region.value}>
+                        <Checkbox checked={isSelected} />
+                        <ListItemText primary={region.label} />
+                      </MenuItem>
+                    );
+                  })}
                 </Select>
               </FormControl>
             </Grid>
 
-            {/* Start Date */}
+            {/* Date Range Selection */}
             <Grid item xs={12} md={3}>
-              <DatePicker
-                label="Tanggal Mulai"
-                value={dayjs(localFilters.start_date)}
-                onChange={(newValue) =>
-                  handleFilterChange(
-                    "start_date",
-                    newValue.format("YYYY-MM-DD")
-                  )
-                }
-                renderInput={(params) => <TextField {...params} fullWidth />}
-                maxDate={dayjs(localFilters.end_date)}
-              />
+              <FormControl fullWidth>
+                <InputLabel>Periode Data</InputLabel>
+                <Select
+                  value={localFilters.date_range || 30}
+                  onChange={(e) => handleDateRangeChange(e.target.value)}
+                  label="Periode Data"
+                  endAdornment={
+                    showCustomDate ? <ExpandLess /> : <ExpandMore />
+                  }
+                >
+                  {dateRanges.map((item) => (
+                    <MenuItem key={item.value} value={item.value}>
+                      {item.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
 
-            {/* End Date */}
+            {/* Manual Apply Button (Optional) */}
             <Grid item xs={12} md={3}>
-              <DatePicker
-                label="Tanggal Selesai"
-                value={dayjs(localFilters.end_date)}
-                onChange={(newValue) =>
-                  handleFilterChange("end_date", newValue.format("YYYY-MM-DD"))
-                }
-                renderInput={(params) => <TextField {...params} fullWidth />}
-                minDate={dayjs(localFilters.start_date)}
-                maxDate={dayjs()}
-              />
-            </Grid>
-
-            {/* Weather Data Toggle */}
-            <Grid item xs={12} md={3}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={localFilters.include_weather || false}
-                    onChange={(e) => {
-                      handleFilterChange("include_weather", e.target.checked);
-                      onWeatherToggle?.(e.target.checked);
-                    }}
-                    color="primary"
-                  />
-                }
-                label={
-                  <Box sx={{ display: "flex", alignItems: "center" }}>
-                    <CloudQueue sx={{ mr: 0.5, fontSize: 20 }} />
-                    Data Cuaca
-                  </Box>
-                }
-              />
-            </Grid>
-
-            {/* Events Toggle */}
-            <Grid item xs={12} md={3}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={localFilters.include_events || false}
-                    onChange={(e) =>
-                      handleFilterChange("include_events", e.target.checked)
-                    }
-                    color="secondary"
-                  />
-                }
-                label={
-                  <Box sx={{ display: "flex", alignItems: "center" }}>
-                    <Event sx={{ mr: 0.5, fontSize: 20 }} />
-                    Event Khusus
-                  </Box>
-                }
-              />
+              <Button
+                variant="outlined"
+                onClick={handleReset}
+                disabled={loading}
+                startIcon={<Refresh />}
+                fullWidth
+              >
+                Reset Filter
+              </Button>
             </Grid>
           </Grid>
 
-          {/* Action Buttons */}
-          <Box
-            sx={{ display: "flex", gap: 2, mt: 3, justifyContent: "flex-end" }}
-          >
-            <Button variant="outlined" onClick={handleReset} disabled={loading}>
-              Reset Filter
-            </Button>
-            <Button
-              variant="contained"
-              onClick={handleApply}
-              disabled={loading}
-              startIcon={
-                loading ? <Refresh className="spinning" /> : <TrendingUp />
-              }
-              sx={{
-                "& .spinning": {
-                  animation: "spin 1s linear infinite",
-                },
-                "@keyframes spin": {
-                  "0%": { transform: "rotate(0deg)" },
-                  "100%": { transform: "rotate(360deg)" },
-                },
-              }}
+          {/* Custom Date Range Section */}
+          <Collapse in={showCustomDate}>
+            <Box
+              sx={{ mt: 3, p: 2, backgroundColor: "grey.50", borderRadius: 1 }}
             >
-              {loading ? "Memuat Data..." : "Terapkan Filter"}
-            </Button>
+              <Typography
+                variant="subtitle2"
+                sx={{ mb: 2, color: "primary.main" }}
+              >
+                📅 Pilih Tanggal Custom (Maksimal 1 Tahun)
+              </Typography>
+
+              {dateError && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  {dateError}
+                </Alert>
+              )}
+
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <DatePicker
+                    label="Tanggal Mulai"
+                    value={dayjs(localFilters.start_date)}
+                    onChange={(newValue) =>
+                      handleCustomDateChange("start_date", newValue)
+                    }
+                    maxDate={dayjs(localFilters.end_date)}
+                    slotProps={{
+                      textField: {
+                        fullWidth: true,
+                        error: !!dateError,
+                      },
+                    }}
+                  />
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <DatePicker
+                    label="Tanggal Akhir"
+                    value={dayjs(localFilters.end_date)}
+                    onChange={(newValue) =>
+                      handleCustomDateChange("end_date", newValue)
+                    }
+                    minDate={dayjs(localFilters.start_date)}
+                    maxDate={maxDate}
+                    slotProps={{
+                      textField: {
+                        fullWidth: true,
+                        error: !!dateError,
+                      },
+                    }}
+                  />
+                </Grid>
+              </Grid>
+
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ mt: 1, display: "block" }}
+              >
+                💡 Tip: Data tersedia sampai {DATASET_MAX_DATE}. Range maksimal
+                365 hari untuk performa optimal.
+              </Typography>
+            </Box>
+          </Collapse>
+
+          {/* Event Info - Always Enabled */}
+          <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: "divider" }}>
+            <Alert
+              severity="info"
+              icon={<Event />}
+              sx={{ bgcolor: "secondary.50" }}
+            >
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                📅 Event Monitoring Aktif
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Sistem secara otomatis mendeteksi dan menampilkan event khusus
+                (Ramadan, Lebaran, Natal & Tahun Baru) yang dapat mempengaruhi
+                fluktuasi harga pangan untuk memberikan konteks analisis yang
+                lebih lengkap.
+              </Typography>
+            </Alert>
           </Box>
         </CardContent>
       </Card>

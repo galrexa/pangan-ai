@@ -1,50 +1,122 @@
-import React, { useState } from "react";
+// File: frontend/src/components/Dashboard/ChartContainer.js
+// SIMPLIFIED VERSION - Price Chart Only
+
+import React, { useState, useMemo } from "react";
 import Plot from "react-plotly.js";
 import {
   Card,
   CardContent,
   Box,
   Typography,
-  ToggleButton,
-  ToggleButtonGroup,
   Grid,
   Chip,
   Alert,
   CircularProgress,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from "@mui/material";
-import {
-  ShowChart,
-  CloudQueue,
-  Event,
-  CompareArrows,
-} from "@mui/icons-material";
-import {
-  createPriceChartConfig,
-  createWeatherChartConfig,
-  createCorrelationChartConfig,
-} from "../../services/chartUtils";
+import { ShowChart, Event, Palette } from "@mui/icons-material";
+
+// Enhanced color palettes
+const COMMODITY_COLORS = {
+  "Cabai Rawit Merah": "#d32f2f", // Red
+  "Cabai Merah Keriting": "#ff5722", // Deep Orange
+  "Bawang Merah": "#9c27b0", // Purple
+  "Bawang Putih": "#673ab7", // Deep Purple
+  Tomat: "#f44336", // Light Red
+  default: "#1976d2", // Blue
+};
+
+const REGION_COLORS = {
+  "Kota Bandung": "#1976d2", // Blue
+  "Kabupaten Bogor": "#388e3c", // Green
+  "Kabupaten Cirebon": "#f57c00", // Orange
+  "Kabupaten Majalengka": "#7b1fa2", // Purple
+  "Kota Depok": "#00796b", // Teal
+  "Kota Bekasi": "#455a64", // Blue Grey
+  "Kabupaten Garut": "#5d4037", // Brown
+  "Kabupaten Bandung": "#e91e63", // Pink
+  default: "#666666", // Grey
+};
+
+const CHART_COLORS = [
+  "#1976d2",
+  "#388e3c",
+  "#f57c00",
+  "#d32f2f",
+  "#7b1fa2",
+  "#00796b",
+  "#455a64",
+  "#e91e63",
+];
 
 const ChartContainer = ({
   priceData = [],
-  weatherData = [],
-  correlationData = [],
   activeEvents = [],
   loading = false,
   error = null,
+  onLoadMore = null,
 }) => {
-  const [chartType, setChartType] = useState("price");
-  const [weatherType, setWeatherType] = useState("temperature");
+  const [colorBy, setColorBy] = useState("commodity"); // 'commodity' or 'region'
 
-  const handleChartTypeChange = (event, newType) => {
-    if (newType !== null) {
-      setChartType(newType);
-    }
-  };
+  // Process and group data for multi-series charts
+  const processedChartData = useMemo(() => {
+    if (!priceData.length) return [];
 
-  const handleWeatherTypeChange = (event, newType) => {
-    if (newType !== null) {
-      setWeatherType(newType);
-    }
+    // Group data by the selected criteria
+    const grouped = {};
+
+    priceData.forEach((item) => {
+      const key = colorBy === "commodity" ? item.commodity : item.region;
+      if (!grouped[key]) {
+        grouped[key] = [];
+      }
+      grouped[key].push(item);
+    });
+
+    // Convert to Plotly traces
+    return Object.entries(grouped).map(([key, data], index) => {
+      const colorMap =
+        colorBy === "commodity" ? COMMODITY_COLORS : REGION_COLORS;
+      const color =
+        colorMap[key] ||
+        colorMap.default ||
+        CHART_COLORS[index % CHART_COLORS.length];
+
+      // Sort data by date
+      const sortedData = data.sort(
+        (a, b) => new Date(a.date) - new Date(b.date)
+      );
+
+      return {
+        x: sortedData.map((d) => d.date),
+        y: sortedData.map((d) => d.price),
+        type: "scatter",
+        mode: "lines+markers",
+        name: key,
+        line: {
+          color: color,
+          width: 2,
+        },
+        marker: {
+          color: color,
+          size: 4,
+          line: { color: "white", width: 1 },
+        },
+        hovertemplate: `
+          <b>%{fullData.name}</b><br>
+          Tanggal: %{x}<br>
+          Harga: Rp %{y:,.0f}<br>
+          <extra></extra>
+        `,
+      };
+    });
+  }, [priceData, colorBy]);
+
+  const handleColorByChange = (event) => {
+    setColorBy(event.target.value);
   };
 
   const renderChart = () => {
@@ -53,12 +125,14 @@ const ChartContainer = ({
         <Box
           sx={{
             display: "flex",
+            flexDirection: "column",
             justifyContent: "center",
             alignItems: "center",
             height: 400,
           }}
         >
           <CircularProgress />
+          <Typography sx={{ mt: 2 }}>Memuat chart...</Typography>
         </Box>
       );
     }
@@ -71,75 +145,64 @@ const ChartContainer = ({
       );
     }
 
-    if (!priceData.length && chartType === "price") {
+    if (!priceData.length) {
       return (
         <Alert severity="info" sx={{ m: 2 }}>
-          Tidak ada data harga untuk filter yang dipilih
+          Tidak ada data harga untuk filter yang dipilih. Silakan ubah filter
+          atau periode tanggal.
         </Alert>
       );
     }
 
-    switch (chartType) {
-      case "price":
-        const priceConfig = createPriceChartConfig(
-          priceData,
-          "Trend Harga Pangan"
-        );
-        return (
-          <Plot
-            data={priceConfig.data}
-            layout={priceConfig.layout}
-            config={priceConfig.config}
-            style={{ width: "100%", height: "400px" }}
-            useResizeHandler
-          />
-        );
-
-      case "weather":
-        if (!weatherData.length) {
-          return (
-            <Alert severity="info" sx={{ m: 2 }}>
-              Tidak ada data cuaca untuk filter yang dipilih
-            </Alert>
-          );
-        }
-        const weatherConfig = createWeatherChartConfig(
-          weatherData,
-          weatherType
-        );
-        return (
-          <Plot
-            data={weatherConfig.data}
-            layout={weatherConfig.layout}
-            config={weatherConfig.config}
-            style={{ width: "100%", height: "400px" }}
-            useResizeHandler
-          />
-        );
-
-      case "correlation":
-        if (!correlationData.length) {
-          return (
-            <Alert severity="info" sx={{ m: 2 }}>
-              Data korelasi tidak tersedia
-            </Alert>
-          );
-        }
-        const correlationConfig = createCorrelationChartConfig(correlationData);
-        return (
-          <Plot
-            data={correlationConfig.data}
-            layout={correlationConfig.layout}
-            config={correlationConfig.config}
-            style={{ width: "100%", height: "400px" }}
-            useResizeHandler
-          />
-        );
-
-      default:
-        return null;
-    }
+    return (
+      <Plot
+        data={processedChartData}
+        layout={{
+          title: {
+            text: `Trend Harga Pangan (Dikelompokkan berdasarkan ${
+              colorBy === "commodity" ? "Komoditas" : "Wilayah"
+            })`,
+            font: { size: 16, weight: "bold" },
+          },
+          xaxis: {
+            title: "Tanggal",
+            type: "date",
+            showgrid: true,
+            gridcolor: "#f0f0f0",
+          },
+          yaxis: {
+            title: "Harga (Rp)",
+            tickformat: ",.0f",
+            showgrid: true,
+            gridcolor: "#f0f0f0",
+          },
+          showlegend: true,
+          legend: {
+            orientation: "h",
+            y: -0.15,
+            x: 0.5,
+            xanchor: "center",
+          },
+          hovermode: "x unified",
+          margin: { t: 60, r: 50, b: 100, l: 80 },
+          plot_bgcolor: "white",
+          paper_bgcolor: "white",
+        }}
+        config={{
+          responsive: true,
+          displayModeBar: true,
+          modeBarButtonsToRemove: ["lasso2d", "select2d", "autoScale2d"],
+          displaylogo: false,
+        }}
+        style={{ width: "100%", height: "450px" }}
+        useResizeHandler={true}
+      />
+    );
   };
+
+  // Get unique commodities and regions for legend info
+  const uniqueCommodities = [...new Set(priceData.map((d) => d.commodity))];
+  const uniqueRegions = [...new Set(priceData.map((d) => d.region))];
 
   return (
     <Card>
@@ -150,7 +213,7 @@ const ChartContainer = ({
               <Box sx={{ display: "flex", alignItems: "center" }}>
                 <ShowChart sx={{ mr: 1, color: "primary.main" }} />
                 <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                  Visualisasi Data
+                  Trend Harga Pangan
                 </Typography>
               </Box>
             </Grid>
@@ -178,68 +241,72 @@ const ChartContainer = ({
             </Grid>
           </Grid>
 
-          {/* Chart Type Selector */}
-          <Box
-            sx={{
-              mt: 2,
-              display: "flex",
-              gap: 2,
-              flexWrap: "wrap",
-              alignItems: "center",
-            }}
-          >
-            <ToggleButtonGroup
-              value={chartType}
-              exclusive
-              onChange={handleChartTypeChange}
-              size="small"
-            >
-              <ToggleButton value="price">
-                <ShowChart sx={{ mr: 0.5 }} />
-                Harga
-              </ToggleButton>
-              <ToggleButton value="weather">
-                <CloudQueue sx={{ mr: 0.5 }} />
-                Cuaca
-              </ToggleButton>
-              <ToggleButton value="correlation">
-                <CompareArrows sx={{ mr: 0.5 }} />
-                Korelasi
-              </ToggleButton>
-            </ToggleButtonGroup>
-
-            {/* Weather Type Selector */}
-            {chartType === "weather" && (
-              <ToggleButtonGroup
-                value={weatherType}
-                exclusive
-                onChange={handleWeatherTypeChange}
-                size="small"
-              >
-                <ToggleButton value="temperature">Suhu</ToggleButton>
-                <ToggleButton value="humidity">Kelembaban</ToggleButton>
-                <ToggleButton value="rainfall">Hujan</ToggleButton>
-                <ToggleButton value="windSpeed">Angin</ToggleButton>
-              </ToggleButtonGroup>
-            )}
-          </Box>
+          {/* Chart Controls - Only Color Grouping */}
+          {priceData.length > 0 && (
+            <Box sx={{ mt: 2 }}>
+              <FormControl size="small" sx={{ minWidth: 200 }}>
+                <InputLabel>Kelompokkan berdasarkan</InputLabel>
+                <Select
+                  value={colorBy}
+                  onChange={handleColorByChange}
+                  label="Kelompokkan berdasarkan"
+                  startAdornment={<Palette sx={{ mr: 0.5, fontSize: 16 }} />}
+                >
+                  <MenuItem value="commodity">
+                    Komoditas ({uniqueCommodities.length})
+                  </MenuItem>
+                  <MenuItem value="region">
+                    Wilayah ({uniqueRegions.length})
+                  </MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
+          )}
         </Box>
 
         {/* Chart Rendering */}
         <Box sx={{ minHeight: 400 }}>{renderChart()}</Box>
 
-        {/* Chart Info */}
-        <Box sx={{ mt: 2, p: 2, backgroundColor: "grey.50", borderRadius: 1 }}>
-          <Typography variant="body2" color="text.secondary">
-            <strong>Tips:</strong>
-            {chartType === "price" &&
-              " Klik dan drag untuk zoom, double-click untuk reset view. Hover untuk detail data."}
-            {chartType === "weather" &&
-              " Data cuaca terintegrasi dengan data harga untuk analisis korelasi."}
-            {chartType === "correlation" &&
-              " Nilai korelasi mendekati 1 menunjukkan hubungan positif yang kuat."}
-          </Typography>
-        </Box>
+        {/* Data Info */}
+        {/* <Box sx={{ mt: 2, p: 2, backgroundColor: "grey.50", borderRadius: 1 }}>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={8}>
+              <Typography variant="body2" color="text.secondary">
+                <strong>Tips:</strong> Klik dan drag untuk zoom, double-click
+                untuk reset view. Hover untuk detail data. Ubah pengelompokan
+                untuk analisis yang berbeda.
+              </Typography>
+            </Grid>
+
+            {priceData.length > 0 && (
+              <Grid item xs={12} md={4}>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ textAlign: "right" }}
+                >
+                  <strong>Data:</strong> {priceData.length} records
+                  {onLoadMore && (
+                    <Box component="span" sx={{ ml: 1 }}>
+                      •{" "}
+                      <Box
+                        component="span"
+                        sx={{
+                          color: "primary.main",
+                          cursor: "pointer",
+                          textDecoration: "underline",
+                        }}
+                        onClick={onLoadMore}
+                      >
+                        Load More
+                      </Box>
+                    </Box>
+                  )}
+                </Typography>
+              </Grid>
+            )}
+          </Grid>
+        </Box> */}
       </CardContent>
     </Card>
   );

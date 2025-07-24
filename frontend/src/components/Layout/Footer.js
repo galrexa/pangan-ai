@@ -10,8 +10,8 @@ const Footer = () => {
         backgroundColor: "background.paper",
         borderTop: "1px solid",
         borderColor: "divider",
-        py: 3,
-        px: 3,
+        py: 1,
+        px: 1,
         mt: "auto",
       }}
     >
@@ -28,7 +28,7 @@ const Footer = () => {
           </Typography>
         </Grid>
 
-        <Grid item xs={12} md={6}>
+        {/* <Grid item xs={12} md={6}>
           <Box
             sx={{
               display: "flex",
@@ -59,7 +59,7 @@ const Footer = () => {
               variant="outlined"
             />
           </Box>
-        </Grid>
+        </Grid> */}
       </Grid>
 
       <Divider sx={{ my: 2 }} />
@@ -69,15 +69,6 @@ const Footer = () => {
           <Typography variant="caption" color="text.secondary">
             Data Source: Badan Pangan Nasional (BAPANAS) • Weather: BMKG • AI
             Engine: ChatGPT/Claude API • Model: Hybrid SARIMA-LSTM
-          </Typography>
-        </Grid>
-        <Grid item xs={12} md={4}>
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ textAlign: { md: "right" }, display: "block" }}
-          >
-            Prototype for Data Driven Decision Making
           </Typography>
         </Grid>
       </Grid>

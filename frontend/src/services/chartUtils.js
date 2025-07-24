@@ -93,6 +93,35 @@ export const createWeatherChartConfig = (data, weatherType = "temperature") => {
   };
 };
 
+export const createOptimizedPriceChart = (priceData) => {
+  // Limit to last 100 points for performance
+  const limitedData = priceData.slice(-100);
+
+  return {
+    data: [
+      {
+        x: limitedData.map((d) => d.date),
+        y: limitedData.map((d) => d.price),
+        type: "scatter",
+        mode: "lines", // No markers for better performance
+        line: { color: "#1976d2", width: 2 },
+        name: "Harga",
+      },
+    ],
+    layout: {
+      title: "Historical Price Trend",
+      xaxis: { title: "Tanggal" },
+      yaxis: { title: "Harga (Rp)" },
+      showlegend: false,
+      margin: { t: 50, r: 50, b: 50, l: 80 },
+    },
+    config: {
+      displayModeBar: false, // Hide toolbar for performance
+      responsive: true,
+    },
+  };
+};
+
 export const createCorrelationChartConfig = (correlationData) => {
   return {
     data: [
