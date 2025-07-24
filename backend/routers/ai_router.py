@@ -109,46 +109,29 @@ async def quick_insight(
     predicted_price: float,
     days_ahead: int = 7
 ):
-    """Quick insight generation for simple prediction data"""
+    """Quick insight generation untuk simple prediction data"""
     try:
-        # Create simplified prediction data
-        predictions = [current_price + (predicted_price - current_price) * (i + 1) / days_ahead 
-                      for i in range(days_ahead)]
+        change_pct = ((predicted_price - current_price) / current_price) * 100
         
-        prediction_data = {
+        quick_data = {
             'commodity': commodity,
-            'region': 'General',
             'current_price': current_price,
-            'predictions': predictions,
-            'trend_analysis': {
-                'direction': 'INCREASING' if predicted_price > current_price else 'DECREASING',
-                'total_change_pct': ((predicted_price - current_price) / current_price * 100),
-            },
-            'risk_assessment': {
-                'risk_level': 'HIGH' if abs((predicted_price - current_price) / current_price * 100) > 20 else 'MEDIUM'
-            }
+            'predicted_price': predicted_price,
+            'days_ahead': days_ahead,
+            'change_pct': f"{change_pct:+.1f}"
         }
         
-        result = ai_service.generate_prediction_insights(prediction_data)
-        
-        if not result.get('success', False):
-            raise HTTPException(status_code=500, detail=result.get('error', 'Failed to generate quick insight'))
+        result = ai_service.generate_quick_insight(quick_data)
         
         return {
-            'success': True,
-            'insight': result.get('insights'),
-            'input_data': {
-                'commodity': commodity,
-                'current_price': current_price,
-                'predicted_price': predicted_price,
-                'change_pct': ((predicted_price - current_price) / current_price * 100)
-            }
+            "success": True,
+            "quick_insight": result,
+            "change_percentage": change_pct,
+            "trend_direction": "INCREASING" if change_pct > 0 else "DECREASING"
         }
         
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Error generating quick insight: {str(e)}")
+        logger.error(f"Quick insight error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/sample-chat")

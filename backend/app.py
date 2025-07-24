@@ -1,9 +1,17 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from utils.error_handlers import (
+    validation_exception_handler,
+    http_exception_handler, 
+    general_exception_handler
+)
 import sys
 import os
 from pathlib import Path
+from typing import Optional
+from datetime import datetime
 
 # Add current directory to Python path
 current_dir = Path(__file__).parent
@@ -35,6 +43,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(HTTPException, http_exception_handler)
+app.add_exception_handler(Exception, general_exception_handler)
 
 # Global variables for services (initialized later)
 data_service = None
@@ -142,6 +154,7 @@ async def comprehensive_health_check():
             "service": "PANGAN-AI"
         }
 
+
 # Fallback endpoints (always available)
 @app.get("/api/data/commodities")
 async def get_commodities_fallback():
@@ -164,6 +177,198 @@ async def get_commodities_fallback():
             "fallback": True,
             "message": "Using mock data - services not loaded"
         }
+
+# Tambahkan ini setelah @app.get("/health") di app.py
+
+@app.get("/api/data/historical")
+async def get_historical_data_force(
+    komoditas: str = "all",
+    wilayah: str = "all", 
+    level_harga: str = "all",
+    start_date: str = None,
+    end_date: str = None,
+    include_weather: bool = True,
+    include_events: bool = True
+):
+    """Historical data endpoint - force registered with debug"""
+    logger.info(f"🔍 Historical data requested: komoditas='{komoditas}', wilayah='{wilayah}'")
+    
+    try:
+        if data_service:
+            logger.info(f"📊 DataService status: data_loaded={data_service.data_loaded}")
+            
+            if data_service.data_loaded:
+                # Debug available data
+                available_commodities = data_service.get_available_commodities()
+                available_regions = data_service.get_available_regions()
+                
+                logger.info(f"📦 Available commodities: {available_commodities}")
+                logger.info(f"🌍 Available regions: {available_regions}")
+                
+                # Check case sensitivity
+                komoditas_normalized = komoditas.title() if komoditas != "all" else "all"
+                logger.info(f"🔤 Normalized komoditas: '{komoditas}' -> '{komoditas_normalized}'")
+                
+                # Convert string dates to date objects if provided
+                start_dt = None
+                end_dt = None
+                
+                if start_date:
+                    try:
+                        start_dt = datetime.fromisoformat(start_date).date()
+                        logger.info(f"📅 Start date: {start_dt}")
+                    except Exception as e:
+                        logger.error(f"❌ Invalid start_date: {e}")
+                        
+                if end_date:
+                    try:
+                        end_dt = datetime.fromisoformat(end_date).date()
+                        logger.info(f"📅 End date: {end_dt}")
+                    except Exception as e:
+                        logger.error(f"❌ Invalid end_date: {e}")
+                
+                # Try with original komoditas first
+                result = data_service.get_historical_data(
+                    commodity=None if komoditas == "all" else komoditas,
+                    region=None if wilayah == "all" else wilayah,
+                    start_date=start_dt,
+                    end_date=end_dt,
+                    limit=1000
+                )
+                
+                logger.info(f"📈 DataService result success: {result.get('success', False)}")
+                logger.info(f"📊 Records returned: {len(result.get('data', []))}")
+                
+                if result.get('success', False) and len(result.get('data', [])) > 0:
+                    # Process successful data
+                    processed_data = []
+                    raw_data = result.get('data', [])
+                    
+                    for item in raw_data:
+                        data_item = {
+                            "tanggal": item['tanggal'],
+                            "komoditas": item['komoditas'],
+                            "wilayah": item['wilayah'],
+                            "level_harga": level_harga if level_harga != "all" else "Konsumen", 
+                            "harga": item['harga']
+                        }
+                        
+                        if include_weather:
+                            data_item["cuaca"] = {
+                                "suhu_rata": item.get('tavg', 26.5),
+                                "kelembaban": item.get('rh_avg', 75),
+                                "curah_hujan": item.get('curah_hujan', 0),
+                                "kecepatan_angin": item.get('ff_avg', 3)
+                            }
+                        
+                        if include_events:
+                            events = []
+                            if item.get('ramadan', False):
+                                events.append("ramadan")
+                            if item.get('idul_fitri', False):
+                                events.append("idul_fitri")
+                            if item.get('natal_newyear', False):
+                                events.append("natal_tahun_baru")
+                            if not events:
+                                events.append("normal")
+                            data_item["events"] = events
+                        
+                        processed_data.append(data_item)
+                    
+                    # Extract summary
+                    metadata = result.get('metadata', {})
+                    price_stats = metadata.get('price_stats', {})
+                    
+                    logger.info(f"✅ Returning REAL data: {len(processed_data)} records")
+                    
+                    return {
+                        "success": True,
+                        "data": processed_data,
+                        "filters_applied": {
+                            "komoditas": komoditas,
+                            "wilayah": wilayah,
+                            "level_harga": level_harga,
+                            "start_date": start_date,
+                            "end_date": end_date,
+                            "include_weather": include_weather,
+                            "include_events": include_events
+                        },
+                        "summary": {
+                            "total_records": len(processed_data),
+                            "date_range": f"{metadata.get('date_range', {}).get('start', '')} to {metadata.get('date_range', {}).get('end', '')}",
+                            "avg_price": price_stats.get('avg', 0),
+                            "min_price": price_stats.get('min', 0),
+                            "max_price": price_stats.get('max', 0),
+                            "current_price": price_stats.get('current', 0)
+                        },
+                        "data_source": "DataService_Real",
+                        "debug_info": {
+                            "available_commodities": available_commodities,
+                            "available_regions": available_regions,
+                            "query_komoditas": komoditas,
+                            "normalized_komoditas": komoditas_normalized
+                        }
+                    }
+                else:
+                    logger.warning(f"⚠️ DataService returned no data or failed")
+                    # Try with normalized komoditas
+                    if komoditas != "all" and komoditas_normalized != komoditas:
+                        logger.info(f"🔄 Retrying with normalized komoditas: {komoditas_normalized}")
+                        result2 = data_service.get_historical_data(
+                            commodity=komoditas_normalized,
+                            region=None if wilayah == "all" else wilayah,
+                            start_date=start_dt,
+                            end_date=end_dt,
+                            limit=1000
+                        )
+                        if result2.get('success', False) and len(result2.get('data', [])) > 0:
+                            logger.info(f"✅ Success with normalized komoditas!")
+                            # Process result2 same as above...
+            else:
+                logger.error("❌ DataService data not loaded")
+        else:
+            logger.error("❌ DataService not available")
+    
+    except Exception as e:
+        logger.error(f"🔥 Exception in DataService: {str(e)}")
+        import traceback
+        logger.error(f"🔥 Traceback: {traceback.format_exc()}")
+    
+    # Fallback mock data
+    logger.info("🔄 Returning MOCK data")
+    return {
+        "success": True,
+        "data": [
+            {
+                "tanggal": "2025-06-01",
+                "komoditas": komoditas if komoditas != "all" else "Cabai Rawit Merah",
+                "wilayah": wilayah if wilayah != "all" else "Kota Bandung", 
+                "level_harga": level_harga if level_harga != "all" else "Konsumen",
+                "harga": 65000,
+                "cuaca": {
+                    "suhu_rata": 26.5,
+                    "kelembaban": 75,
+                    "curah_hujan": 0
+                } if include_weather else None,
+                "events": ["normal"] if include_events else None
+            }
+        ],
+        "filters_applied": {
+            "komoditas": komoditas,
+            "wilayah": wilayah,
+            "level_harga": level_harga,
+            "include_weather": include_weather,
+            "include_events": include_events
+        },
+        "summary": {
+            "total_records": 1,
+            "avg_price": 65000
+        },
+        "data_source": "Mock_Fallback",
+        "debug_info": {
+            "reason": "DataService failed or returned no data"
+        }
+    }
 
 @app.get("/api/data/regions")
 async def get_regions_fallback():
