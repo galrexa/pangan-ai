@@ -1,0 +1,79 @@
+{
+  "model_info": {
+    "name": "PANGAN-AI Price Prediction Model",
+    "version": "1.0",
+    "created_date": "2025-07-24 03:06:49",
+    "model_type": "LSTM Deep Learning",
+    "framework": "TensorFlow 2.12.0"
+  },
+  "data_info": {
+    "total_samples": 5916,
+    "commodities": [
+      "Cabai Rawit Merah"
+    ],
+    "regions": [
+      "Kabupaten Bogor",
+      "Kabupaten Cirebon",
+      "Kabupaten Majalengka",
+      "Kota Bandung"
+    ],
+    "features_count": 28,
+    "sequence_length": 30,
+    "prediction_horizon": 7
+  },
+  "features": {
+    "core_features": [
+      "harga",
+      "harga_lag_1",
+      "harga_lag_3",
+      "harga_lag_7",
+      "harga_lag_14",
+      "harga_rolling_mean_7",
+      "harga_rolling_std_7",
+      "harga_rolling_mean_14",
+      "harga_rolling_std_14",
+      "harga_rolling_mean_30",
+      "harga_rolling_std_30",
+      "harga_change_1d",
+      "harga_change_7d"
+    ],
+    "weather_features": [
+      "tavg_final",
+      "rh_avg_final",
+      "ff_avg_final",
+      "tavg_flag",
+      "rh_avg_flag",
+      "ff_avg_flag"
+    ],
+    "temporal_features": [
+      "month_sin",
+      "month_cos",
+      "day_sin",
+      "day_cos",
+      "is_weekend"
+    ],
+    "holiday_features": [
+      "dum_ramadan",
+      "dum_idulfitri",
+      "dum_natal_newyr"
+    ],
+    "lag_features": [
+      "tavg_flag",
+      "rh_avg_flag",
+      "ff_avg_flag",
+      "imputasi_flag",
+      "harga_lag_1",
+      "harga_lag_3",
+      "harga_lag_7",
+      "harga_lag_14"
+    ],
+    "rolling_features": [
+      "harga_rolling_mean_7",
+      "harga_rolling_std_7",
+      "harga_rolling_mean_14",
+      "harga_rolling_std_14",
+      "harga_rolling_mean_30",
+      "harga_rolling_std_30"
+    ]
+  }
+}
