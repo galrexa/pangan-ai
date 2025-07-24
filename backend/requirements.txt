@@ -2,7 +2,7 @@ fastapi
 uvicorn
 pandas
 numpy
-tensorflow==2.19.0
+tensorflow==2.18.0
 scikit-learn
 openai
 python-multipart
