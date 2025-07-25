@@ -14,17 +14,9 @@ import {
   Slider,
   FormHelperText,
   Chip,
-  Switch,
-  FormControlLabel,
 } from "@mui/material";
-import {
-  Psychology,
-  CloudQueue,
-  Event,
-  TrendingUp,
-  Settings,
-} from "@mui/icons-material";
-import { COMMODITIES, REGIONS, PRICE_LEVELS } from "../../utils/constants";
+import { Psychology, TrendingUp, BusinessCenter } from "@mui/icons-material";
+import { COMMODITIES, REGIONS } from "../../utils/constants";
 
 const PredictionForm = ({
   onSubmit,
@@ -36,15 +28,14 @@ const PredictionForm = ({
   const [formData, setFormData] = useState({
     komoditas: "Cabai Rawit Merah",
     wilayah: "Kota Bandung",
-    level_harga: "Konsumen",
+    level_harga: "Konsumen", // Fixed to Konsumen
     prediction_days: 7,
-    include_weather_forecast: true,
-    confidence_level: 95,
+    include_weather_forecast: true, // Fixed to true
+    confidence_level: 95, // Fixed confidence level
     ...initialValues,
   });
 
   const [formErrors, setFormErrors] = useState({});
-  const [advanced, setAdvanced] = useState(false);
 
   useEffect(() => {
     validateForm();
@@ -68,8 +59,8 @@ const PredictionForm = ({
       errors.wilayah = "Pilih wilayah";
     }
 
-    if (formData.prediction_days < 1 || formData.prediction_days > 30) {
-      errors.prediction_days = "Hari prediksi harus antara 1-30";
+    if (formData.prediction_days < 1 || formData.prediction_days > 14) {
+      errors.prediction_days = "Periode prediksi harus antara 1-14 hari";
     }
 
     setFormErrors(errors);
@@ -82,57 +73,54 @@ const PredictionForm = ({
     }
   };
 
-  const getPredictionComplexity = (days) => {
-    if (days <= 3) return { level: "Rendah", color: "success" };
-    if (days <= 7) return { level: "Sedang", color: "warning" };
-    return { level: "Tinggi", color: "error" };
+  const getPredictionPeriod = (days) => {
+    if (days <= 3) return { label: "Jangka Pendek", color: "success" };
+    if (days <= 7) return { label: "Mingguan", color: "primary" };
+    return { label: "Jangka Menengah", color: "warning" };
   };
 
-  const complexity = getPredictionComplexity(formData.prediction_days);
+  const period = getPredictionPeriod(formData.prediction_days);
 
   return (
-    <Card>
+    <Card sx={{ boxShadow: 3 }}>
       <CardContent>
         <Box sx={{ mb: 3 }}>
           <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-            <Psychology sx={{ mr: 1, color: "primary.main" }} />
-            <Typography variant="h6" sx={{ fontWeight: 600 }}>
-              Form Prediksi Harga
+            <BusinessCenter sx={{ mr: 1, color: "primary.main" }} />
+            <Typography
+              variant="h5"
+              sx={{ fontWeight: 600, color: "primary.main" }}
+            >
+              Prediksi Harga Strategis
             </Typography>
-            <Box sx={{ ml: "auto" }}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={advanced}
-                    onChange={(e) => setAdvanced(e.target.checked)}
-                    size="small"
-                  />
-                }
-                label={
-                  <Box sx={{ display: "flex", alignItems: "center" }}>
-                    <Settings sx={{ mr: 0.5, fontSize: 18 }} />
-                    Advanced
-                  </Box>
-                }
-              />
-            </Box>
           </Box>
 
-          <Typography variant="body2" color="text.secondary">
-            Isi form di bawah untuk menghasilkan prediksi harga berbasis model
-            LSTM
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+            Analisis prediksi harga komoditas strategis berbasis AI untuk
+            pengambilan keputusan eksekutif
           </Typography>
+
+          <Alert severity="info" sx={{ mb: 3 }}>
+            <Typography variant="body2">
+              <strong>Executive Dashboard:</strong> Prediksi otomatis
+              menggunakan model LSTM dengan data cuaca, analisis pola musiman,
+              dan faktor event khusus (Ramadan, Idul Fitri, Natal).
+            </Typography>
+          </Alert>
         </Box>
 
-        <Grid container spacing={3}>
+        <Grid container spacing={4}>
           {/* Commodity Selection */}
-          <Grid item xs={12} md={4}>
-            <FormControl fullWidth error={!!formErrors.komoditas}>
-              <InputLabel>Komoditas *</InputLabel>
+          <Grid item xs={12} md={6}>
+            <FormControl fullWidth error={!!formErrors.komoditas} size="large">
+              <InputLabel sx={{ fontSize: "1.1rem" }}>
+                Komoditas Strategis *
+              </InputLabel>
               <Select
                 value={formData.komoditas}
                 onChange={(e) => handleChange("komoditas", e.target.value)}
-                label="Komoditas *"
+                label="Komoditas Strategis *"
+                sx={{ fontSize: "1.1rem" }}
               >
                 {(availableCommodities.length > 0
                   ? availableCommodities
@@ -147,14 +135,15 @@ const PredictionForm = ({
                         width: "100%",
                       }}
                     >
-                      {commodity.label}
+                      <Typography variant="body1">{commodity.label}</Typography>
                       {commodity.volatility && (
                         <Chip
-                          label={`${commodity.volatility}% volatilitas`}
+                          label={`Volatilitas ${commodity.volatility}%`}
                           size="small"
                           color={
                             commodity.volatility > 15 ? "error" : "warning"
                           }
+                          variant="outlined"
                         />
                       )}
                     </Box>
@@ -162,153 +151,120 @@ const PredictionForm = ({
                 ))}
               </Select>
               {formErrors.komoditas && (
-                <FormHelperText>{formErrors.komoditas}</FormHelperText>
+                <FormHelperText sx={{ fontSize: "0.9rem" }}>
+                  {formErrors.komoditas}
+                </FormHelperText>
               )}
             </FormControl>
           </Grid>
 
           {/* Region Selection */}
-          <Grid item xs={12} md={4}>
-            <FormControl fullWidth error={!!formErrors.wilayah}>
-              <InputLabel>Wilayah *</InputLabel>
+          <Grid item xs={12} md={6}>
+            <FormControl fullWidth error={!!formErrors.wilayah} size="large">
+              <InputLabel sx={{ fontSize: "1.1rem" }}>
+                Wilayah Prioritas *
+              </InputLabel>
               <Select
                 value={formData.wilayah}
                 onChange={(e) => handleChange("wilayah", e.target.value)}
-                label="Wilayah *"
+                label="Wilayah Prioritas *"
+                sx={{ fontSize: "1.1rem" }}
               >
                 {(availableRegions.length > 0
                   ? availableRegions
                   : REGIONS.filter((r) => r.value !== "all")
                 ).map((region) => (
                   <MenuItem key={region.value} value={region.value}>
-                    {region.label}
+                    <Typography variant="body1">{region.label}</Typography>
                   </MenuItem>
                 ))}
               </Select>
               {formErrors.wilayah && (
-                <FormHelperText>{formErrors.wilayah}</FormHelperText>
+                <FormHelperText sx={{ fontSize: "0.9rem" }}>
+                  {formErrors.wilayah}
+                </FormHelperText>
               )}
             </FormControl>
           </Grid>
 
-          {/* Price Level */}
-          <Grid item xs={12} md={4}>
-            <FormControl fullWidth>
-              <InputLabel>Level Harga</InputLabel>
-              <Select
-                value={formData.level_harga}
-                onChange={(e) => handleChange("level_harga", e.target.value)}
-                label="Level Harga"
-              >
-                {PRICE_LEVELS.filter((level) => level.value !== "all").map(
-                  (level) => (
-                    <MenuItem key={level.value} value={level.value}>
-                      {level.label}
-                    </MenuItem>
-                  )
-                )}
-              </Select>
-            </FormControl>
-          </Grid>
-
-          {/* Prediction Days Slider */}
-          <Grid item xs={12} md={6}>
-            <Typography gutterBottom sx={{ fontWeight: 500 }}>
-              Periode Prediksi: {formData.prediction_days} hari
-            </Typography>
-            <Slider
-              value={formData.prediction_days}
-              onChange={(e, value) => handleChange("prediction_days", value)}
-              min={1}
-              max={30}
-              step={1}
-              marks={[
-                { value: 1, label: "1 hari" },
-                { value: 7, label: "1 minggu" },
-                { value: 14, label: "2 minggu" },
-                { value: 30, label: "1 bulan" },
-              ]}
-              valueLabelDisplay="auto"
-              color="primary"
-            />
-            <Box
-              sx={{ display: "flex", justifyContent: "space-between", mt: 1 }}
-            >
-              <Typography variant="caption" color="text.secondary">
-                Kompleksitas:
-              </Typography>
-              <Chip
-                label={complexity.level}
-                size="small"
-                color={complexity.color}
-              />
-            </Box>
-            {formErrors.prediction_days && (
-              <FormHelperText error>
-                {formErrors.prediction_days}
-              </FormHelperText>
-            )}
-          </Grid>
-
-          {/* Options */}
-          <Grid item xs={12} md={6}>
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={formData.include_weather_forecast}
-                    onChange={(e) =>
-                      handleChange("include_weather_forecast", e.target.checked)
-                    }
-                    color="primary"
-                  />
-                }
-                label={
-                  <Box sx={{ display: "flex", alignItems: "center" }}>
-                    <CloudQueue sx={{ mr: 0.5, fontSize: 20 }} />
-                    Sertakan Prediksi Cuaca
-                  </Box>
-                }
-              />
-
-              {advanced && (
-                <Box>
-                  <Typography gutterBottom sx={{ fontWeight: 500 }}>
-                    Confidence Level: {formData.confidence_level}%
-                  </Typography>
-                  <Slider
-                    value={formData.confidence_level}
-                    onChange={(e, value) =>
-                      handleChange("confidence_level", value)
-                    }
-                    min={80}
-                    max={99}
-                    step={1}
-                    valueLabelDisplay="auto"
-                    color="secondary"
-                  />
-                </Box>
-              )}
-            </Box>
-          </Grid>
-
-          {/* Additional Info */}
+          {/* Prediction Period */}
           <Grid item xs={12}>
-            <Alert severity="info" sx={{ mt: 2 }}>
-              <Typography variant="body2">
-                <strong>Catatan:</strong> Prediksi menggunakan model LSTM yang
-                telah dilatih dengan data historis
-                {formData.include_weather_forecast && ", data cuaca, "}
-                dan variabel event khusus (Ramadan, Idul Fitri, Natal). Akurasi
-                prediksi menurun seiring bertambahnya periode waktu.
+            <Box sx={{ px: 2 }}>
+              <Typography
+                gutterBottom
+                sx={{ fontWeight: 600, fontSize: "1.1rem", mb: 2 }}
+              >
+                Periode Analisis: {formData.prediction_days} hari
               </Typography>
-            </Alert>
+
+              <Slider
+                value={formData.prediction_days}
+                onChange={(e, value) => handleChange("prediction_days", value)}
+                min={1}
+                max={14}
+                step={1}
+                marks={[
+                  { value: 1, label: "1 hari" },
+                  { value: 3, label: "3 hari" },
+                  { value: 7, label: "1 minggu" },
+                  { value: 14, label: "2 minggu" },
+                ]}
+                valueLabelDisplay="auto"
+                color="primary"
+                sx={{
+                  height: 8,
+                  "& .MuiSlider-thumb": {
+                    height: 20,
+                    width: 20,
+                  },
+                  "& .MuiSlider-track": {
+                    height: 8,
+                  },
+                  "& .MuiSlider-rail": {
+                    height: 8,
+                  },
+                }}
+              />
+
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  mt: 2,
+                }}
+              >
+                <Typography variant="body1" color="text.secondary">
+                  Jenis Analisis:
+                </Typography>
+                <Chip
+                  label={period.label}
+                  color={period.color}
+                  variant="outlined"
+                  sx={{ fontWeight: 600 }}
+                />
+              </Box>
+
+              {formErrors.prediction_days && (
+                <FormHelperText error sx={{ fontSize: "0.9rem", mt: 1 }}>
+                  {formErrors.prediction_days}
+                </FormHelperText>
+              )}
+            </Box>
           </Grid>
         </Grid>
 
-        {/* Submit Button */}
+        {/* Action Buttons */}
         <Box
-          sx={{ display: "flex", justifyContent: "flex-end", mt: 3, gap: 2 }}
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            mt: 4,
+            pt: 3,
+            borderTop: "1px solid",
+            borderColor: "divider",
+          }}
         >
           <Button
             variant="outlined"
@@ -323,6 +279,8 @@ const PredictionForm = ({
               })
             }
             disabled={loading}
+            size="large"
+            sx={{ px: 4 }}
           >
             Reset
           </Button>
@@ -332,19 +290,33 @@ const PredictionForm = ({
             onClick={handleSubmit}
             disabled={loading || Object.keys(formErrors).length > 0}
             startIcon={
-              loading ? <TrendingUp className="spinning" /> : <Psychology />
+              loading ? (
+                <TrendingUp
+                  sx={{
+                    animation: "spin 1s linear infinite",
+                    "@keyframes spin": {
+                      "0%": { transform: "rotate(0deg)" },
+                      "100%": { transform: "rotate(360deg)" },
+                    },
+                  }}
+                />
+              ) : (
+                <Psychology />
+              )
             }
+            size="large"
             sx={{
-              "& .spinning": {
-                animation: "spin 1s linear infinite",
-              },
-              "@keyframes spin": {
-                "0%": { transform: "rotate(0deg)" },
-                "100%": { transform: "rotate(360deg)" },
+              px: 6,
+              py: 1.5,
+              fontSize: "1.1rem",
+              fontWeight: 600,
+              boxShadow: 3,
+              "&:hover": {
+                boxShadow: 6,
               },
             }}
           >
-            {loading ? "Memproses Prediksi..." : "Generate Prediksi"}
+            {loading ? "Memproses Analisis..." : "Generate Prediksi Strategis"}
           </Button>
         </Box>
       </CardContent>

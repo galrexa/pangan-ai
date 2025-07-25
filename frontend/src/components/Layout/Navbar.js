@@ -7,6 +7,7 @@ import {
   Box,
   Chip,
   useTheme,
+  useMediaQuery,
 } from "@mui/material";
 import {
   Menu as MenuIcon,
@@ -15,8 +16,9 @@ import {
   EventAvailable,
 } from "@mui/icons-material";
 
-const Navbar = ({ onMenuClick }) => {
+const Navbar = ({ onMenuClick, sidebarOpen, sidebarCollapsed }) => {
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
   return (
     <AppBar
@@ -30,7 +32,7 @@ const Navbar = ({ onMenuClick }) => {
       <Toolbar>
         <IconButton
           color="inherit"
-          aria-label="open drawer"
+          aria-label="toggle sidebar"
           onClick={onMenuClick}
           edge="start"
           sx={{ mr: 2 }}

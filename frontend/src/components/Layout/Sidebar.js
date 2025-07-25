@@ -12,6 +12,8 @@ import {
   Divider,
   Chip,
   useTheme,
+  IconButton,
+  Tooltip,
 } from "@mui/material";
 import {
   Dashboard,
@@ -21,6 +23,8 @@ import {
   CloudQueue,
   Event,
   BarChart,
+  ChevronLeft,
+  ChevronRight,
 } from "@mui/icons-material";
 
 const DRAWER_WIDTH = 280;
@@ -31,38 +35,41 @@ const menuItems = [
     path: "/dashboard",
     label: "Historical Dashboard",
     icon: <Dashboard />,
-    description: "Data historis & analisis trend",
   },
   {
     path: "/prediction",
     label: "Price Prediction",
     icon: <TrendingUp />,
-    description: "Prediksi harga 7 hari ke depan",
   },
   {
     path: "/chat",
     label: "AI Assistant",
     icon: <Chat />,
-    description: "Chat dengan AI untuk insights",
   },
 ];
 
-const Sidebar = ({ open, onClose, isMobile }) => {
+const Sidebar = ({ open, collapsed, onClose, onToggleCollapse, isMobile }) => {
   const theme = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
+
+  const drawerWidth = collapsed ? MINI_DRAWER_WIDTH : DRAWER_WIDTH;
 
   const drawerContent = (
     <Box sx={{ overflow: "auto", height: "100%" }}>
       {/* Header */}
       <Box
         sx={{
-          p: 2,
+          p: collapsed ? 1 : 2,
           mt: 8,
-          textAlign: open ? "left" : "center",
+          textAlign: collapsed ? "center" : "left",
+          minHeight: 80,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
         }}
       >
-        {open && (
+        {!collapsed && (
           <>
             <Typography
               variant="h6"
@@ -75,59 +82,96 @@ const Sidebar = ({ open, onClose, isMobile }) => {
             </Typography>
           </>
         )}
+
+        {/* Collapse Toggle Button (Desktop Only) */}
+        {!isMobile && (
+          <Box
+            sx={{
+              position: "absolute",
+              top: collapsed ? 100 : 120,
+              right: collapsed ? 8 : 16,
+            }}
+          >
+            {/* <Tooltip title={collapsed ? "Expand Sidebar" : "Collapse Sidebar"}>
+              <IconButton
+                onClick={onToggleCollapse}
+                size="small"
+                sx={{
+                  bgcolor: "background.paper",
+                  border: "1px solid",
+                  borderColor: "divider",
+                  "&:hover": {
+                    bgcolor: "action.hover",
+                  },
+                }}
+              >
+                {collapsed ? <ChevronRight /> : <ChevronLeft />}
+              </IconButton>
+            </Tooltip> */}
+          </Box>
+        )}
       </Box>
 
       <Divider />
 
       {/* Main Navigation */}
-      <List sx={{ px: 1 }}>
+      <List sx={{ px: collapsed ? 0.5 : 1 }}>
         {menuItems.map((item) => {
           const isActive = location.pathname === item.path;
 
           return (
             <ListItem key={item.path} disablePadding sx={{ mb: 1 }}>
-              <ListItemButton
-                onClick={() => navigate(item.path)}
-                sx={{
-                  borderRadius: 2,
-                  backgroundColor: isActive ? "primary.main" : "transparent",
-                  color: isActive ? "white" : "text.primary",
-                  "&:hover": {
-                    backgroundColor: isActive ? "primary.dark" : "action.hover",
-                  },
-                  minHeight: open ? 64 : 48,
-                  justifyContent: open ? "initial" : "center",
-                  px: 2,
-                }}
+              <Tooltip
+                title={collapsed ? item.label : ""}
+                placement="right"
+                disableHoverListener={!collapsed}
               >
-                <ListItemIcon
+                <ListItemButton
+                  onClick={() => navigate(item.path)}
                   sx={{
-                    minWidth: 0,
-                    mr: open ? 2 : "auto",
-                    justifyContent: "center",
-                    color: isActive ? "white" : "text.secondary",
+                    borderRadius: 2,
+                    mx: collapsed ? 0.5 : 1,
+                    backgroundColor: isActive ? "primary.main" : "transparent",
+                    color: isActive ? "white" : "text.primary",
+                    "&:hover": {
+                      backgroundColor: isActive
+                        ? "primary.dark"
+                        : "action.hover",
+                    },
+                    minHeight: collapsed ? 48 : 64,
+                    justifyContent: collapsed ? "center" : "initial",
+                    px: collapsed ? 1 : 2,
                   }}
                 >
-                  {item.icon}
-                </ListItemIcon>
+                  <ListItemIcon
+                    sx={{
+                      minWidth: collapsed ? 0 : 40,
+                      mr: collapsed ? 0 : 2,
+                      justifyContent: "center",
+                      color: isActive ? "white" : "text.secondary",
+                    }}
+                  >
+                    {item.icon}
+                  </ListItemIcon>
 
-                {open && (
-                  <ListItemText
-                    primary={item.label}
-                    secondary={item.description}
-                    primaryTypographyProps={{
-                      fontSize: "0.9rem",
-                      fontWeight: isActive ? 600 : 500,
-                    }}
-                    secondaryTypographyProps={{
-                      fontSize: "0.75rem",
-                      color: isActive
-                        ? "rgba(255,255,255,0.7)"
-                        : "text.secondary",
-                    }}
-                  />
-                )}
-              </ListItemButton>
+                  {!collapsed && (
+                    <ListItemText
+                      primary={item.label}
+                      secondary={item.description}
+                      primaryTypographyProps={{
+                        fontSize: "0.9rem",
+                        fontWeight: isActive ? 600 : 500,
+                      }}
+                      secondaryTypographyProps={{
+                        fontSize: "0.75rem",
+                        color: isActive
+                          ? "rgba(255,255,255,0.7)"
+                          : "text.secondary",
+                      }}
+                    />
+                  )}
+                </ListItemButton>
+              </Tooltip>
             </ListItem>
           );
         })}
@@ -136,7 +180,7 @@ const Sidebar = ({ open, onClose, isMobile }) => {
       <Divider sx={{ my: 2 }} />
 
       {/* Feature Status */}
-      {open && (
+      {/* {!collapsed && (
         <Box sx={{ px: 2 }}>
           <Typography
             variant="body2"
@@ -177,10 +221,28 @@ const Sidebar = ({ open, onClose, isMobile }) => {
             />
           </Box>
         </Box>
-      )}
+      )} */}
+
+      {/* Collapsed Status Icons */}
+      {/* {collapsed && (
+        <Box sx={{ px: 1, display: "flex", flexDirection: "column", gap: 1 }}>
+          <Tooltip title="LSTM Model Active" placement="right">
+            <Assessment color="success" sx={{ mx: "auto" }} />
+          </Tooltip>
+          <Tooltip title="Weather Data Online" placement="right">
+            <CloudQueue color="primary" sx={{ mx: "auto" }} />
+          </Tooltip>
+          <Tooltip title="Event Monitoring" placement="right">
+            <Event color="secondary" sx={{ mx: "auto" }} />
+          </Tooltip>
+          <Tooltip title="Price Level Tracking" placement="right">
+            <BarChart color="info" sx={{ mx: "auto" }} />
+          </Tooltip>
+        </Box>
+      )} */}
 
       {/* Footer Info */}
-      {open && (
+      {!collapsed && (
         <Box sx={{ mt: "auto", p: 2, pt: 4 }}>
           <Typography
             variant="caption"
@@ -199,14 +261,14 @@ const Sidebar = ({ open, onClose, isMobile }) => {
 
   return (
     <Drawer
-      variant={isMobile ? "temporary" : "persistent"}
+      variant={isMobile ? "temporary" : "permanent"}
       open={open}
       onClose={onClose}
       sx={{
-        width: open ? DRAWER_WIDTH : MINI_DRAWER_WIDTH,
+        width: isMobile ? DRAWER_WIDTH : drawerWidth,
         flexShrink: 0,
         "& .MuiDrawer-paper": {
-          width: open ? DRAWER_WIDTH : MINI_DRAWER_WIDTH,
+          width: isMobile ? DRAWER_WIDTH : drawerWidth,
           boxSizing: "border-box",
           borderRight: "1px solid",
           borderColor: "divider",
@@ -215,6 +277,7 @@ const Sidebar = ({ open, onClose, isMobile }) => {
             easing: theme.transitions.easing.sharp,
             duration: theme.transitions.duration.enteringScreen,
           }),
+          overflowX: "hidden",
         },
       }}
       ModalProps={{

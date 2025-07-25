@@ -7,6 +7,7 @@ import {
 } from "react-router-dom";
 import { ThemeProvider } from "@mui/material/styles";
 import { CssBaseline } from "@mui/material";
+import "./App.css"; // ← TAMBAHKAN INI
 import theme from "./styles/theme";
 import Layout from "./components/Layout/Layout";
 import HistoricalDashboard from "./components/Dashboard/HistoricalDashboard";

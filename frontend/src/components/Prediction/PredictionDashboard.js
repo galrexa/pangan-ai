@@ -11,7 +11,7 @@ import {
 import PredictionForm from "./PredictionForm";
 import PredictionResults from "./PredictionResults";
 import AIInsights from "./AIInsights";
-import { apiService } from "../../services/api";
+import apiService from "../../services/api";
 
 const PredictionDashboard = () => {
   const [predictionData, setPredictionData] = useState(null);

@@ -3,7 +3,7 @@ import { Container, Typography, Box, Alert, Snackbar } from "@mui/material";
 import FilterPanel from "./FilterPanel";
 import StatisticsCards from "./StatisticsCards";
 import ChartContainer from "./ChartContainer";
-import { apiService } from "../../services/api";
+import apiService from "../../services/api";
 import { getLastNDays, parseDataRow } from "../../utils/helpers";
 
 const HistoricalDashboard = () => {
