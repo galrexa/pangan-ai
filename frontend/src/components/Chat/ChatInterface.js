@@ -56,6 +56,8 @@ const ChatInterface = () => {
     responseTime: "~2s",
     accuracy: "94%",
   });
+  // State to hold the latest prediction data for context in chat
+  const [lastPredictionData, setLastPredictionData] = useState(null);
 
   const messagesEndRef = useRef(null);
 
@@ -66,6 +68,31 @@ const ChatInterface = () => {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Function to fetch AI service status
+  useEffect(() => {
+    const fetchAiStatus = async () => {
+      try {
+        const status = await apiService.getAIStatus(); // Assuming getAIStatus exists in apiService
+        if (status.success) {
+          setAiStatus({
+            online: true,
+            model: status.provider || "AI Model", // Use actual provider from backend
+            responseTime: "~" + (status.avg_response_time || "2s"),
+            accuracy: status.model_accuracy
+              ? `${(status.model_accuracy * 100).toFixed(0)}%`
+              : "N/A",
+          });
+        } else {
+          setAiStatus((prev) => ({ ...prev, online: false }));
+        }
+      } catch (error) {
+        console.error("Error fetching AI status:", error);
+        setAiStatus((prev) => ({ ...prev, online: false }));
+      }
+    };
+    fetchAiStatus();
+  }, []); // Run once on component mount
 
   // Enhanced Quick Action Cards
   const quickActions = [
@@ -111,7 +138,7 @@ const ChatInterface = () => {
     },
   ];
 
-  const handleQuickAction = (action) => {
+  const handleQuickAction = async (action) => {
     const userMessage = {
       id: Date.now(),
       message: action.prompt,
@@ -124,106 +151,75 @@ const ChatInterface = () => {
     setIsLoading(true);
     setShowQuickActions(false);
 
-    // Simulate AI response
-    setTimeout(() => {
-      const aiResponse = {
-        id: Date.now() + 1,
-        message: generateMockResponse(action.category),
-        isUser: false,
-        timestamp: new Date().toISOString(),
-        metadata: {
-          tokens_used: Math.floor(Math.random() * 200) + 50,
-          provider: "claude-3.5",
-          confidence: Math.floor(Math.random() * 20) + 80,
-          cached: Math.random() > 0.7,
+    try {
+      // Build context from lastPredictionData if available
+      const chatContext = lastPredictionData
+        ? {
+            current_commodity: lastPredictionData.commodity,
+            current_region: lastPredictionData.region,
+            last_prediction: {
+              commodity: lastPredictionData.commodity,
+              region: lastPredictionData.region,
+              current_price: lastPredictionData.current_price,
+              predictions:
+                lastPredictionData.predictions?.map((p) => p.predicted_price) ||
+                [],
+              trend_analysis: lastPredictionData.trend_analysis,
+              risk_assessment: lastPredictionData.risk_assessment,
+            },
+          }
+        : null;
+
+      const aiResponse = await apiService.chatWithAI({
+        message: action.prompt,
+        context: chatContext,
+        conversation_id: "quick_action_chat", // Unique ID for quick action conversations
+      });
+
+      if (aiResponse.success) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now() + 1,
+            message: aiResponse.response,
+            isUser: false,
+            timestamp: new Date().toISOString(),
+            metadata: aiResponse.metadata,
+          },
+        ]);
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now() + 1,
+            message:
+              aiResponse.error ||
+              "Maaf, terjadi kesalahan saat menghubungi AI. Silakan coba lagi.",
+            isUser: false,
+            timestamp: new Date().toISOString(),
+            metadata: { provider: "error" },
+          },
+        ]);
+      }
+    } catch (error) {
+      console.error("Error in AI chat (quick action):", error);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + 1,
+          message:
+            "Maaf, terjadi masalah koneksi dengan AI service. Silakan coba lagi nanti.",
+          isUser: false,
+          timestamp: new Date().toISOString(),
+          metadata: { provider: "connection_error" },
         },
-      };
-
-      setMessages((prev) => [...prev, aiResponse]);
+      ]);
+    } finally {
       setIsLoading(false);
-    }, 2000 + Math.random() * 2000);
+    }
   };
 
-  const generateMockResponse = (category) => {
-    const responses = {
-      prediction: `📊 **Prediksi Harga Cabai Rawit Merah - Kabupaten Bogor**
-
-**Trend Prediksi 7 Hari:**
-• Hari 1-3: Rp 120.000 → Rp 115.000 (-4.2%)
-• Hari 4-5: Rp 115.000 → Rp 122.000 (+6.1%)  
-• Hari 6-7: Rp 122.000 → Rp 118.000 (-3.3%)
-
-**Faktor Pendukung:**
-✅ Supply stabil dari petani lokal
-✅ Cuaca mendukung (tidak ada hujan ekstrem)
-⚠️ Menjelang akhir pekan (demand meningkat)
-
-**Confidence Level:** 87% | **Risk Level:** Medium
-
-**Rekomendasi:** Monitor supply chain hari ke-4 untuk antisipasi lonjakan demand.`,
-
-      analysis: `🔍 **Analisis Pasar Bawang Merah Terkini**
-
-**Kondisi Saat Ini:**
-• Harga rata-rata: Rp 45.000/kg (+12% dari bulan lalu)
-• Volatilitas: Sedang (CV: 8.2%)
-• Supply: Cukup stabil di sentra produksi
-
-**Faktor Mempengaruhi:**
-📈 **Positif:** Panen raya di Brebes dan Nganjuk
-📉 **Negatif:** Cuaca tidak menentu, demand musiman
-🔄 **Netral:** Stok nasional dalam batas normal
-
-**Proyeksi:** Harga akan stabil dengan fluktuasi 5-8% dalam 2 minggu ke depan.`,
-
-      policy: `💡 **Rekomendasi Kebijakan - Cabai Merah**
-
-**Tindakan Segera (1-3 hari):**
-🚨 Aktivasi Tim Monitoring Harga Daerah
-📊 Intensifkan pemantauan 4 pasar induk utama
-📞 Koordinasi dengan TPID untuk kesiagaan
-
-**Tindakan Jangka Pendek (1-2 minggu):**
-🛒 Siapkan operasi pasar jika harga naik >25%
-📦 Evaluasi stok cadangan strategis
-🚛 Optimalkan distribusi antar wilayah
-
-**Tindakan Jangka Menengah (1-3 bulan):**
-🌱 Program intensifikasi penanaman
-🏪 Perkuat kemitraan dengan distributor
-📱 Tingkatkan sistem early warning
-
-**Estimasi Dampak:** Dapat menekan volatilitas hingga 30%`,
-
-      risk: `⚠️ **Penilaian Risiko Volatilitas Harga**
-
-**Level Risiko Keseluruhan: MEDIUM-HIGH**
-
-**Breakdown Risiko per Komoditas:**
-🔴 **Cabai Rawit:** High Risk (CV: 22.4%)
-🟡 **Bawang Merah:** Medium Risk (CV: 12.1%)  
-🟡 **Cabai Keriting:** Medium Risk (CV: 15.3%)
-
-**Faktor Risiko Utama:**
-⛈️ Cuaca ekstrem (40% probabilitas)
-📅 Event musiman Ramadan (85% probabilitas)  
-🚛 Gangguan logistik (15% probabilitas)
-💰 Spekulasi pasar (25% probabilitas)
-
-**Mitigasi yang Disarankan:**
-✅ Perkuat monitoring real-time
-✅ Siapkan stok buffer 15-20%
-✅ Koordinasi lintas daerah
-✅ Komunikasi publik proaktif`,
-    };
-
-    return (
-      responses[category] ||
-      "Maaf, saya membutuhkan informasi lebih lanjut untuk memberikan analisis yang akurat."
-    );
-  };
-
-  const handleSendMessage = (message) => {
+  const handleSendMessage = async (message) => {
     const userMessage = {
       id: Date.now(),
       message,
@@ -234,25 +230,72 @@ const ChatInterface = () => {
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
 
-    // Simulate AI response
-    setTimeout(() => {
-      const aiResponse = {
-        id: Date.now() + 1,
-        message:
-          "Terima kasih atas pertanyaan Anda. Berdasarkan analisis data terkini, saya dapat memberikan insight yang relevan. Mohon sebutkan komoditas dan wilayah spesifik yang ingin dianalisis untuk rekomendasi yang lebih akurat.",
-        isUser: false,
-        timestamp: new Date().toISOString(),
-        metadata: {
-          tokens_used: 85,
-          provider: "claude-3.5",
-          confidence: 92,
-          cached: false,
-        },
-      };
+    try {
+      // Build context from lastPredictionData if available
+      const chatContext = lastPredictionData
+        ? {
+            current_commodity: lastPredictionData.commodity,
+            current_region: lastPredictionData.region,
+            last_prediction: {
+              commodity: lastPredictionData.commodity,
+              region: lastPredictionData.region,
+              current_price: lastPredictionData.current_price,
+              predictions:
+                lastPredictionData.predictions?.map((p) => p.predicted_price) ||
+                [],
+              trend_analysis: lastPredictionData.trend_analysis,
+              risk_assessment: lastPredictionData.risk_assessment,
+            },
+          }
+        : null;
 
-      setMessages((prev) => [...prev, aiResponse]);
+      const aiResponse = await apiService.chatWithAI({
+        message: message,
+        context: chatContext,
+        conversation_id: "main_chat", // A consistent ID for the main chat
+      });
+
+      if (aiResponse.success) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now() + 1,
+            message: aiResponse.response,
+            isUser: false,
+            timestamp: new Date().toISOString(),
+            metadata: aiResponse.metadata,
+          },
+        ]);
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now() + 1,
+            message:
+              aiResponse.error ||
+              "Maaf, terjadi kesalahan saat menghubungi AI. Silakan coba lagi.",
+            isUser: false,
+            timestamp: new Date().toISOString(),
+            metadata: { provider: "error" },
+          },
+        ]);
+      }
+    } catch (error) {
+      console.error("Error in AI chat (send message):", error);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + 1,
+          message:
+            "Maaf, terjadi masalah koneksi dengan AI service. Silakan coba lagi nanti.",
+          isUser: false,
+          timestamp: new Date().toISOString(),
+          metadata: { provider: "connection_error" },
+        },
+      ]);
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   return (
@@ -296,9 +339,9 @@ const ChatInterface = () => {
               <Card
                 elevation={0}
                 sx={{
-                  bgcolor: "success.50",
+                  bgcolor: aiStatus.online ? "success.50" : "error.50",
                   border: "1px solid",
-                  borderColor: "success.200",
+                  borderColor: aiStatus.online ? "success.200" : "error.200",
                 }}
               >
                 <CardContent sx={{ py: 1.5, "&:last-child": { pb: 1.5 } }}>
@@ -310,18 +353,24 @@ const ChatInterface = () => {
                       flexWrap: "wrap",
                     }}
                   >
-                    <CheckCircle color="success" sx={{ fontSize: 16 }} />
+                    {aiStatus.online ? (
+                      <CheckCircle color="success" sx={{ fontSize: 16 }} />
+                    ) : (
+                      <Warning color="error" sx={{ fontSize: 16 }} />
+                    )}
                     <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                      AI Status: Online
+                      AI Status: {aiStatus.online ? "Online" : "Offline"}
                     </Typography>
-                    <Chip
-                      label={aiStatus.model}
-                      size="small"
-                      color="success"
-                      variant="outlined"
-                    />
+                    {aiStatus.online && (
+                      <Chip
+                        label={aiStatus.model}
+                        size="small"
+                        color="success"
+                        variant="outlined"
+                      />
+                    )}
                     <Typography variant="caption" color="text.secondary">
-                      {aiStatus.responseTime}
+                      {aiStatus.online ? aiStatus.responseTime : "N/A"}
                     </Typography>
                   </Box>
                 </CardContent>

@@ -11,6 +11,7 @@ import {
 import PredictionForm from "./PredictionForm";
 import PredictionResults from "./PredictionResults";
 import AIInsights from "./AIInsights";
+import AIChat from "./AIChat"; // Import the new AIChat component
 import apiService from "../../services/api";
 
 const PredictionDashboard = () => {
@@ -202,19 +203,28 @@ const PredictionDashboard = () => {
           </Grid>
         )}
 
-        {/* AI Insights */}
+        {/* AI Insights and AI Chat */}
         {predictionData && formData && !loading && (
-          <Grid item xs={12}>
-            <Fade in timeout={800}>
-              <div>
-                <AIInsights
-                  predictionData={predictionData}
-                  formData={formData}
-                  loading={loading}
-                />
-              </div>
-            </Fade>
-          </Grid>
+          <>
+            <Grid item xs={12} lg={6}>
+              <Fade in timeout={800}>
+                <div>
+                  <AIInsights
+                    predictionData={predictionData}
+                    formData={formData}
+                    loading={loading}
+                  />
+                </div>
+              </Fade>
+            </Grid>
+            <Grid item xs={12} lg={6}>
+              <Fade in timeout={1000}>
+                <div>
+                  <AIChat formData={formData} predictionData={predictionData} />
+                </div>
+              </Fade>
+            </Grid>
+          </>
         )}
       </Grid>
 

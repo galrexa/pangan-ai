@@ -295,10 +295,9 @@ const apiService = {
         throw new Error("Missing prediction_data or form_data");
       }
 
-      // Transform untuk backend format (sesuai AIInsightRequest)
+      // Transform untuk backend format (sesuai AIInsightRequest di backend)
+      // Menyesuaikan dengan struktur yang diharapkan oleh AIService.generate_prediction_insights
       const transformedRequest = {
-        predictions:
-          prediction_data.predictions?.map((p) => p.predicted_price) || [],
         commodity:
           form_data.komoditas || prediction_data.commodity || "Unknown",
         region: form_data.wilayah || prediction_data.region || "Unknown",
@@ -306,13 +305,15 @@ const apiService = {
           prediction_data.statistics?.current_price ||
           prediction_data.current_price ||
           100000,
-        historical_stats: {
-          model_info: prediction_data.model_info || {},
-          risk_assessment: prediction_data.risk_assessment || {},
-          confidence_intervals: prediction_data.confidence_intervals || [],
-          historical_data: prediction_data.historical_data || [],
-          prediction_period: form_data.prediction_days || 7,
-          include_weather: form_data.include_weather_forecast || false,
+        // Pastikan predictions adalah array of numbers (harga)
+        predictions:
+          prediction_data.predictions?.map((p) => p.predicted_price) || [],
+        trend_analysis: prediction_data.trend_analysis || {
+          direction: "STABLE",
+          total_change_pct: 0,
+        },
+        risk_assessment: prediction_data.risk_assessment || {
+          risk_level: "MEDIUM",
         },
       };
 
@@ -343,6 +344,17 @@ const apiService = {
       return response.data;
     } catch (error) {
       console.error("Error in AI chat:", error);
+      throw error;
+    }
+  },
+
+  // ===== AI Status Endpoint =====
+  async getAIStatus() {
+    try {
+      const response = await apiClient.get("/ai/status");
+      return response.data;
+    } catch (error) {
+      console.error("Error getting AI status:", error);
       throw error;
     }
   },
