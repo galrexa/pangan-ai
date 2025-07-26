@@ -1,3 +1,6 @@
+// File: frontend/src/components/Dashboard/FilterPanel.js
+// FIXED VERSION - Perbaikan auto-apply dan state sync
+
 import React, { useState, useEffect } from "react";
 import {
   Card,
@@ -11,7 +14,7 @@ import {
   Box,
   Typography,
   Chip,
-  TextField,
+  //TextField,
   Alert,
   Collapse,
   OutlinedInput,
@@ -24,7 +27,7 @@ import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import {
   FilterList,
   Event,
-  TrendingUp,
+  //TrendingUp,
   Refresh,
   DateRange,
   ExpandMore,
@@ -98,7 +101,7 @@ const FilterPanel = ({
     return "";
   };
 
-  // AUTO APPLY - Trigger ketika filter berubah
+  // FIXED: Simplified filter change handler
   const handleFilterChange = (field, value) => {
     const newFilters = { ...localFilters, [field]: value };
     setLocalFilters(newFilters);
@@ -108,13 +111,8 @@ const FilterPanel = ({
       setDateError("");
     }
 
-    // AUTO APPLY - Langsung trigger perubahan
+    // FIXED: Direct call to parent with new filters
     onFiltersChange(newFilters);
-
-    // Small delay untuk debounce, lalu auto apply
-    setTimeout(() => {
-      onApplyFilters();
-    }, 300);
   };
 
   const handleDateRangeChange = (value) => {
@@ -132,7 +130,6 @@ const FilterPanel = ({
 
       setLocalFilters(newFilters);
       onFiltersChange(newFilters);
-      setTimeout(() => onApplyFilters(), 300);
     } else {
       setShowCustomDate(false);
 
@@ -149,7 +146,6 @@ const FilterPanel = ({
 
       setLocalFilters(newFilters);
       onFiltersChange(newFilters);
-      setTimeout(() => onApplyFilters(), 300);
     }
     setDateError("");
   };
@@ -169,32 +165,36 @@ const FilterPanel = ({
 
     if (!error) {
       onFiltersChange(newFilters);
-      setTimeout(() => onApplyFilters(), 300);
     }
   };
 
-  // MULTIPLE SELECT HANDLER untuk wilayah
+  // FIXED: Multiple select handler untuk wilayah
   const handleMultipleRegionChange = (event) => {
     const value = event.target.value;
     let selectedRegions = typeof value === "string" ? value.split(",") : value;
 
-    // Handle "Semua Wilayah" selection
+    // FIXED: Handle "Semua Wilayah" selection logic
     if (selectedRegions.includes("all")) {
-      if (localFilters.wilayah && localFilters.wilayah.includes("all")) {
-        // If "all" was already selected, deselect it
-        selectedRegions = selectedRegions.filter((region) => region !== "all");
+      // If "all" is clicked
+      const wasAllSelected =
+        Array.isArray(localFilters.wilayah) &&
+        localFilters.wilayah.includes("all");
+
+      if (wasAllSelected) {
+        // If "all" was already selected, deselect it and select first specific region
+        selectedRegions = [regions[1].value]; // Select first non-"all" option
       } else {
         // If "all" is newly selected, select only "all"
         selectedRegions = ["all"];
       }
     } else {
-      // If other options are selected while "all" is present, remove "all"
+      // If specific regions are selected, ensure "all" is not included
       selectedRegions = selectedRegions.filter((region) => region !== "all");
-    }
 
-    // Ensure at least one option is selected
-    if (selectedRegions.length === 0) {
-      selectedRegions = ["all"];
+      // If no regions selected, default to "all"
+      if (selectedRegions.length === 0) {
+        selectedRegions = ["all"];
+      }
     }
 
     handleFilterChange("wilayah", selectedRegions);
@@ -411,36 +411,29 @@ const FilterPanel = ({
                   />
                 </Grid>
               </Grid>
-
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ mt: 1, display: "block" }}
-              >
-                💡 Tip: Data tersedia sampai {DATASET_MAX_DATE}. Range maksimal
-                365 hari untuk performa optimal.
-              </Typography>
             </Box>
           </Collapse>
 
-          {/* Event Info - Always Enabled */}
-          <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: "divider" }}>
-            <Alert
-              severity="info"
-              icon={<Event />}
-              sx={{ bgcolor: "secondary.50" }}
+          {/* Filter Status - Debug Info */}
+          {/* {process.env.NODE_ENV === "development" && (
+            <Box
+              sx={{
+                mt: 2,
+                p: 1,
+                backgroundColor: "info.light",
+                borderRadius: 1,
+              }}
             >
-              <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                📅 Event Monitoring Aktif
+              <Typography variant="caption" color="info.dark">
+                🔍 Debug - Current Filters: Komoditas: {localFilters.komoditas}{" "}
+                | Wilayah:{" "}
+                {Array.isArray(localFilters.wilayah)
+                  ? localFilters.wilayah.join(", ")
+                  : localFilters.wilayah}{" "}
+                | Periode: {localFilters.start_date} to {localFilters.end_date}
               </Typography>
-              <Typography variant="caption" color="text.secondary">
-                Sistem secara otomatis mendeteksi dan menampilkan event khusus
-                (Ramadan, Lebaran, Natal & Tahun Baru) yang dapat mempengaruhi
-                fluktuasi harga pangan untuk memberikan konteks analisis yang
-                lebih lengkap.
-              </Typography>
-            </Alert>
-          </Box>
+            </Box>
+          )} */}
         </CardContent>
       </Card>
     </LocalizationProvider>

@@ -1,5 +1,5 @@
 // File: frontend/src/components/Dashboard/ChartContainer.js
-// SIMPLIFIED VERSION - Price Chart Only
+// FIXED VERSION - Client-side filtering sebagai backup
 
 import React, { useState, useMemo } from "react";
 import Plot from "react-plotly.js";
@@ -57,18 +57,50 @@ const ChartContainer = ({
   activeEvents = [],
   loading = false,
   error = null,
+  filters = {}, // ← ADD filters prop untuk client-side filtering
   onLoadMore = null,
 }) => {
-  const [colorBy, setColorBy] = useState("commodity"); // 'commodity' or 'region'
+  const [colorBy, setColorBy] = useState("commodity");
+
+  // CLIENT-SIDE FILTERING sebagai backup jika backend gagal
+  const filteredPriceData = useMemo(() => {
+    if (!priceData.length) return [];
+
+    let filtered = [...priceData];
+
+    // Filter by wilayah jika bukan "all"
+    if (filters.wilayah && filters.wilayah !== "all") {
+      if (Array.isArray(filters.wilayah)) {
+        // Multiple selection
+        if (!filters.wilayah.includes("all")) {
+          filtered = filtered.filter((item) =>
+            filters.wilayah.includes(item.region)
+          );
+        }
+      } else {
+        // Single selection
+        filtered = filtered.filter((item) => item.region === filters.wilayah);
+      }
+    }
+
+    // Filter by komoditas jika bukan "all"
+    if (filters.komoditas && filters.komoditas !== "all") {
+      filtered = filtered.filter(
+        (item) => item.commodity === filters.komoditas
+      );
+    }
+
+    return filtered;
+  }, [priceData, filters]);
 
   // Process and group data for multi-series charts
   const processedChartData = useMemo(() => {
-    if (!priceData.length) return [];
+    if (!filteredPriceData.length) return [];
 
     // Group data by the selected criteria
     const grouped = {};
 
-    priceData.forEach((item) => {
+    filteredPriceData.forEach((item) => {
       const key = colorBy === "commodity" ? item.commodity : item.region;
       if (!grouped[key]) {
         grouped[key] = [];
@@ -77,7 +109,7 @@ const ChartContainer = ({
     });
 
     // Convert to Plotly traces
-    return Object.entries(grouped).map(([key, data], index) => {
+    const traces = Object.entries(grouped).map(([key, data], index) => {
       const colorMap =
         colorBy === "commodity" ? COMMODITY_COLORS : REGION_COLORS;
       const color =
@@ -113,7 +145,9 @@ const ChartContainer = ({
         `,
       };
     });
-  }, [priceData, colorBy]);
+
+    return traces;
+  }, [filteredPriceData, colorBy]);
 
   const handleColorByChange = (event) => {
     setColorBy(event.target.value);
@@ -145,11 +179,21 @@ const ChartContainer = ({
       );
     }
 
-    if (!priceData.length) {
+    if (!filteredPriceData.length) {
       return (
         <Alert severity="info" sx={{ m: 2 }}>
-          Tidak ada data harga untuk filter yang dipilih. Silakan ubah filter
-          atau periode tanggal.
+          Tidak ada data harga untuk filter yang dipilih.
+          {priceData.length > 0 && (
+            <span>
+              <br />
+              <strong>Debug:</strong> Data mentah tersedia ({priceData.length}{" "}
+              records), tapi tidak ada yang cocok dengan filter: wilayah="
+              {Array.isArray(filters.wilayah)
+                ? filters.wilayah.join(", ")
+                : filters.wilayah}
+              ", komoditas="{filters.komoditas}"
+            </span>
+          )}
         </Alert>
       );
     }
@@ -200,9 +244,11 @@ const ChartContainer = ({
     );
   };
 
-  // Get unique commodities and regions for legend info
-  const uniqueCommodities = [...new Set(priceData.map((d) => d.commodity))];
-  const uniqueRegions = [...new Set(priceData.map((d) => d.region))];
+  // Get unique commodities and regions for legend info dari FILTERED data
+  const uniqueCommodities = [
+    ...new Set(filteredPriceData.map((d) => d.commodity)),
+  ];
+  const uniqueRegions = [...new Set(filteredPriceData.map((d) => d.region))];
 
   return (
     <Card>
@@ -242,7 +288,7 @@ const ChartContainer = ({
           </Grid>
 
           {/* Chart Controls - Only Color Grouping */}
-          {priceData.length > 0 && (
+          {filteredPriceData.length > 0 && (
             <Box sx={{ mt: 2 }}>
               <FormControl size="small" sx={{ minWidth: 200 }}>
                 <InputLabel>Kelompokkan berdasarkan</InputLabel>
@@ -266,47 +312,6 @@ const ChartContainer = ({
 
         {/* Chart Rendering */}
         <Box sx={{ minHeight: 400 }}>{renderChart()}</Box>
-
-        {/* Data Info */}
-        {/* <Box sx={{ mt: 2, p: 2, backgroundColor: "grey.50", borderRadius: 1 }}>
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={8}>
-              <Typography variant="body2" color="text.secondary">
-                <strong>Tips:</strong> Klik dan drag untuk zoom, double-click
-                untuk reset view. Hover untuk detail data. Ubah pengelompokan
-                untuk analisis yang berbeda.
-              </Typography>
-            </Grid>
-
-            {priceData.length > 0 && (
-              <Grid item xs={12} md={4}>
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ textAlign: "right" }}
-                >
-                  <strong>Data:</strong> {priceData.length} records
-                  {onLoadMore && (
-                    <Box component="span" sx={{ ml: 1 }}>
-                      •{" "}
-                      <Box
-                        component="span"
-                        sx={{
-                          color: "primary.main",
-                          cursor: "pointer",
-                          textDecoration: "underline",
-                        }}
-                        onClick={onLoadMore}
-                      >
-                        Load More
-                      </Box>
-                    </Box>
-                  )}
-                </Typography>
-              </Grid>
-            )}
-          </Grid>
-        </Box> */}
       </CardContent>
     </Card>
   );

@@ -1,20 +1,20 @@
-// services/api.js - Updated untuk menggunakan backend data yang proper
+// File: frontend/src/services/api.js
+// FIXED VERSION - Perbaikan parameter mapping
 
 import axios from "axios";
 
-const API_BASE_URL =
-  process.env.REACT_APP_API_URL || "http://localhost:8000/api";
+const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
-// Create axios instance dengan proper config
+// Create axios instance with default config
 const apiClient = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: BASE_URL,
   timeout: 30000,
   headers: {
     "Content-Type": "application/json",
   },
 });
 
-// Request interceptor untuk logging
+// Request interceptor
 apiClient.interceptors.request.use(
   (config) => {
     console.log(
@@ -23,41 +23,28 @@ apiClient.interceptors.request.use(
     return config;
   },
   (error) => {
-    console.error("❌ API Request Error:", error);
+    console.error("❌ Request Error:", error);
     return Promise.reject(error);
   }
 );
 
-// Response interceptor untuk error handling
+// Response interceptor
 apiClient.interceptors.response.use(
   (response) => {
     console.log(`✅ API Response: ${response.config.url}`, response.data);
     return response;
   },
   (error) => {
-    console.error(
-      "❌ API Response Error:",
-      error.response?.data || error.message
-    );
+    console.error("❌ Response Error:", error);
     return Promise.reject(error);
   }
 );
 
 const apiService = {
-  // ===== HEALTH CHECK =====
-  async healthCheck() {
-    try {
-      const response = await apiClient.get("/health");
-      return response.data;
-    } catch (error) {
-      throw new Error(`Health check failed: ${error.message}`);
-    }
-  },
-
   // ===== DATA ENDPOINTS =====
   async getAvailableCommodities() {
     try {
-      const response = await apiClient.get("/data/commodities");
+      const response = await apiClient.get("/api/data/commodities");
       return response.data;
     } catch (error) {
       console.error("Error fetching commodities:", error);
@@ -68,10 +55,18 @@ const apiService = {
           {
             value: "Cabai Rawit Merah",
             label: "Cabai Rawit Merah",
+            volatility: 15,
+          },
+          {
+            value: "Bawang Merah",
+            label: "Bawang Merah",
+            volatility: 12,
+          },
+          {
+            value: "Cabai Merah Keriting",
+            label: "Cabai Merah Keriting",
             volatility: 18,
           },
-          { value: "Bawang Merah", label: "Bawang Merah", volatility: 22 },
-          { value: "Bawang Putih", label: "Bawang Putih", volatility: 15 },
           {
             value: "Cabai Merah Besar",
             label: "Cabai Merah Besar",
@@ -84,7 +79,7 @@ const apiService = {
 
   async getAvailableRegions() {
     try {
-      const response = await apiClient.get("/data/regions");
+      const response = await apiClient.get("/api/data/regions");
       return response.data;
     } catch (error) {
       console.error("Error fetching regions:", error);
@@ -101,26 +96,52 @@ const apiService = {
     }
   },
 
+  // FIXED: Parameter mapping untuk getHistoricalData
   async getHistoricalData(params = {}) {
     try {
+      console.log("🔍 Frontend params received:", params);
+
+      // FIXED: Extract both 'wilayah' and 'region' and map properly
       const {
-        commodity = "all",
-        region = "all",
+        komoditas, // ← Frontend param
+        commodity, // ← Fallback
+        wilayah, // ← Frontend param
+        region, // ← Fallback
         start_date,
         end_date,
         limit = 1000,
+        include_weather,
+        include_events,
       } = params;
 
+      // FIXED: Use wilayah first, then region, then default
+      const finalCommodity = komoditas || commodity || "all";
+      const finalRegion = wilayah || region || "all";
+
+      console.log("🔍 Mapped params:", {
+        finalCommodity,
+        finalRegion,
+        originalWilayah: wilayah,
+        originalRegion: region,
+      });
+
       const queryParams = new URLSearchParams({
-        commodity,
-        region,
+        commodity: finalCommodity,
+        region: finalRegion, // ← Now uses correct mapped value
         limit: limit.toString(),
       });
 
       if (start_date) queryParams.append("start_date", start_date);
       if (end_date) queryParams.append("end_date", end_date);
+      if (include_weather)
+        queryParams.append("include_weather", include_weather);
+      if (include_events) queryParams.append("include_events", include_events);
 
-      const response = await apiClient.get(`/data/historical?${queryParams}`);
+      console.log("🔍 Final query params:", queryParams.toString());
+
+      const response = await apiClient.get(
+        `/api/data/historical?${queryParams}`
+      );
       return response.data;
     } catch (error) {
       console.error("Error fetching historical data:", error);
@@ -133,7 +154,7 @@ const apiService = {
     try {
       console.log("📤 Sending prediction request:", predictionRequest);
 
-      // Transform formData ke format yang diexpect backend
+      // Transform formData ke format yang diexpected backend
       const backendRequest = {
         commodity: predictionRequest.komoditas || predictionRequest.commodity,
         region: predictionRequest.wilayah || predictionRequest.region,
@@ -142,260 +163,137 @@ const apiService = {
           predictionRequest.prediction_days ||
           predictionRequest.days_ahead ||
           7,
-        prediction_type: "daily",
+        prediction_length: predictionRequest.prediction_length || 7,
         include_confidence: true,
-        include_factors: true,
+        model_type: "lstm",
       };
 
-      console.log("🔄 Transformed backend request:", backendRequest);
+      console.log("📤 Transformed backend request:", backendRequest);
 
-      const response = await apiClient.post("/predict/", backendRequest);
+      const response = await apiClient.post("/api/predict", backendRequest);
 
-      // Transform response untuk compatibility dengan frontend
-      if (response.data.success) {
-        return {
-          success: true,
-          data: response.data,
-        };
-      } else {
-        throw new Error(response.data.error || "Prediction failed");
-      }
+      console.log("📥 Prediction response:", response.data);
+      return response.data;
     } catch (error) {
-      console.error("Error generating prediction:", error);
+      console.error("❌ Prediction error:", error);
 
-      // Fallback untuk demo - generate mock data yang realistic
-      console.log("🔄 Using fallback mock prediction data");
-      return this.generateFallbackPrediction(predictionRequest);
+      // Enhanced error handling
+      if (error.response?.status === 422) {
+        const detail = error.response.data?.detail;
+        if (Array.isArray(detail)) {
+          const validationErrors = detail.map((err) => err.msg).join(", ");
+          throw new Error(`Validation error: ${validationErrors}`);
+        }
+      }
+
+      throw error;
     }
-  },
-
-  async generateFallbackPrediction(predictionRequest) {
-    // Simulate loading time
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-
-    const commodity =
-      predictionRequest.komoditas ||
-      predictionRequest.commodity ||
-      "Cabai Rawit Merah";
-    const region =
-      predictionRequest.wilayah || predictionRequest.region || "Kota Bandung";
-    const days =
-      predictionRequest.prediction_days || predictionRequest.days_ahead || 7;
-
-    // Base prices untuk different commodities (dari data real)
-    const basePrices = {
-      "Cabai Rawit Merah": 120901,
-      "Bawang Merah": 45000,
-      "Bawang Putih": 32000,
-      "Cabai Merah Besar": 28000,
-    };
-
-    const basePrice = basePrices[commodity] || 100000;
-
-    // Generate historical data (30 days)
-    const historical_data = [];
-    for (let i = 30; i >= 1; i--) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      const priceVariation = (Math.random() - 0.5) * 0.1; // ±10% variation
-      historical_data.push({
-        date: date.toISOString().split("T")[0],
-        price: basePrice * (1 + priceVariation),
-      });
-    }
-
-    // Generate predictions
-    const predictions = [];
-    const confidence_intervals = [];
-    let currentPrice = basePrice;
-
-    for (let i = 1; i <= days; i++) {
-      const date = new Date();
-      date.setDate(date.getDate() + i);
-
-      // Simulate price trend (slight upward with volatility)
-      const trendFactor = 1 + 0.001 * i; // 0.1% daily growth trend
-      const volatility = (Math.random() - 0.5) * 0.05; // ±5% daily volatility
-      const predictedPrice = currentPrice * trendFactor * (1 + volatility);
-
-      const confidence = Math.max(70, 95 - i * 2); // Decreasing confidence over time
-      const margin = predictedPrice * 0.1; // ±10% confidence interval
-
-      predictions.push({
-        date: date.toISOString().split("T")[0],
-        predicted_price: predictedPrice,
-        confidence: confidence,
-      });
-
-      confidence_intervals.push({
-        date: date.toISOString().split("T")[0],
-        lower_bound: predictedPrice - margin,
-        upper_bound: predictedPrice + margin,
-      });
-
-      currentPrice = predictedPrice;
-    }
-
-    const finalPrice = predictions[predictions.length - 1].predicted_price;
-    const changePercent = ((finalPrice - basePrice) / basePrice) * 100;
-
-    return {
-      success: true,
-      data: {
-        success: true,
-        commodity: commodity,
-        region: region,
-        historical_data: historical_data,
-        predictions: predictions,
-        confidence_intervals: confidence_intervals,
-        statistics: {
-          current_price: basePrice,
-          final_predicted_price: finalPrice,
-          predicted_change_percent: changePercent,
-          prediction_period: days,
-        },
-        model_info: {
-          type: "Hybrid SARIMA-LSTM",
-          accuracy: 0.85 + Math.random() * 0.1,
-          rmse: Math.random() * 5000 + 2000,
-          training_period: "2022-2025",
-          last_updated: new Date().toISOString(),
-        },
-        risk_assessment: {
-          level:
-            Math.abs(changePercent) > 15
-              ? "high"
-              : Math.abs(changePercent) > 5
-              ? "medium"
-              : "low",
-          description:
-            Math.abs(changePercent) > 15
-              ? "Prediksi menunjukkan volatilitas tinggi yang memerlukan monitoring ketat"
-              : "Prediksi menunjukkan fluktuasi sedang yang normal untuk komoditas ini",
-        },
-        confidence: 0.85,
-        current_price: basePrice,
-        trend_analysis: {
-          direction: changePercent > 0 ? "INCREASING" : "DECREASING",
-          total_change_pct: changePercent,
-        },
-      },
-    };
   },
 
   // ===== AI ENDPOINTS =====
-  async getAIInsights(insightRequest) {
+  async generateInsights(predictionData) {
     try {
-      console.log("🤖 Requesting AI insights...");
+      console.log("🤖 Requesting AI insights for:", predictionData);
 
-      // Extract data dari request structure
-      const { prediction_data, form_data } = insightRequest;
-
-      if (!prediction_data || !form_data) {
-        throw new Error("Missing prediction_data or form_data");
-      }
-
-      // Transform untuk backend format (sesuai AIInsightRequest di backend)
-      // Menyesuaikan dengan struktur yang diharapkan oleh AIService.generate_prediction_insights
-      const transformedRequest = {
-        commodity:
-          form_data.komoditas || prediction_data.commodity || "Unknown",
-        region: form_data.wilayah || prediction_data.region || "Unknown",
-        current_price:
-          prediction_data.statistics?.current_price ||
-          prediction_data.current_price ||
-          100000,
-        // Pastikan predictions adalah array of numbers (harga)
-        predictions:
-          prediction_data.predictions?.map((p) => p.predicted_price) || [],
-        trend_analysis: prediction_data.trend_analysis || {
-          direction: "STABLE",
-          total_change_pct: 0,
-        },
-        risk_assessment: prediction_data.risk_assessment || {
-          risk_level: "MEDIUM",
-        },
-      };
-
-      console.log("🔄 Transformed AI request:", transformedRequest);
-
-      const response = await apiClient.post("/ai/insights", transformedRequest);
-      return response;
-    } catch (error) {
-      console.error("❌ AI Insights API failed:", error);
-
-      // Return error untuk let component handle fallback
-      throw new Error(
-        `AI Insights API error: ${
-          error.response?.data?.detail || error.message
-        }`
-      );
-    }
-  },
-
-  async chatWithAI(chatRequest) {
-    try {
-      const response = await apiClient.post("/ai/chat", {
-        message: chatRequest.message,
-        context: chatRequest.context || null,
-        conversation_id: chatRequest.conversation_id || null,
+      const response = await apiClient.post("/api/ai/insights", {
+        prediction_data: predictionData,
+        analysis_type: "comprehensive",
+        include_recommendations: true,
       });
 
+      console.log("🤖 AI insights response:", response.data);
       return response.data;
     } catch (error) {
-      console.error("Error in AI chat:", error);
-      throw error;
-    }
-  },
+      console.error("❌ AI insights error:", error);
 
-  // ===== AI Status Endpoint =====
-  async getAIStatus() {
-    try {
-      const response = await apiClient.get("/ai/status");
-      return response.data;
-    } catch (error) {
-      console.error("Error getting AI status:", error);
-      throw error;
-    }
-  },
-
-  // ===== MODEL STATUS =====
-  async getModelStatus() {
-    try {
-      const response = await apiClient.get("/predict/model-info");
-      return response.data;
-    } catch (error) {
-      console.error("Error getting model status:", error);
+      // Fallback insight untuk demo
       return {
-        success: false,
-        error: error.message,
-        model_info: {
-          exists: false,
-          message: "Model status unavailable",
+        success: true,
+        insights: {
+          summary:
+            "Analisis prediksi menunjukkan tren harga yang stabil dengan fluktuasi normal.",
+          key_points: [
+            "Harga diprediksi mengalami kenaikan bertahap",
+            "Volatilitas berada dalam batas normal",
+            "Faktor musiman berpengaruh signifikan",
+          ],
+          recommendations: [
+            "Pantau perkembangan harga secara berkala",
+            "Pertimbangkan intervensi jika volatilitas meningkat",
+          ],
+          confidence_level: "High",
+          analysis_timestamp: new Date().toISOString(),
         },
       };
     }
   },
 
-  // ===== UTILITY METHODS =====
-  async testConnection() {
+  async chatWithAI(messages, context = {}) {
     try {
-      const health = await this.healthCheck();
-      const modelStatus = await this.getModelStatus();
+      console.log("💬 Sending chat request:", { messages, context });
 
-      return {
-        api_healthy: !!health.status,
-        model_ready: modelStatus.model_info?.exists || false,
-        backend_version: health.version || "unknown",
-        timestamp: new Date().toISOString(),
-      };
+      const response = await apiClient.post("/api/ai/chat", {
+        messages,
+        context,
+        max_tokens: 1000,
+        temperature: 0.7,
+      });
+
+      console.log("💬 Chat response:", response.data);
+      return response.data;
     } catch (error) {
+      console.error("❌ Chat error:", error);
+
+      // Fallback response untuk demo
       return {
-        api_healthy: false,
-        model_ready: false,
-        error: error.message,
-        timestamp: new Date().toISOString(),
+        success: true,
+        response:
+          "Maaf, saya sedang mengalami gangguan. Silakan coba lagi nanti.",
+        conversation_id: Date.now().toString(),
       };
+    }
+  },
+
+  // ===== UTILITY ENDPOINTS =====
+  async healthCheck() {
+    try {
+      const response = await apiClient.get("/health");
+      return response.data;
+    } catch (error) {
+      console.error("Health check failed:", error);
+      return { status: "error", message: "Service unavailable" };
+    }
+  },
+
+  // ===== DATA EXPORT =====
+  async exportData(filters, format = "csv") {
+    try {
+      const queryParams = new URLSearchParams({
+        ...filters,
+        format,
+      });
+
+      const response = await apiClient.get(`/api/data/export?${queryParams}`, {
+        responseType: "blob",
+      });
+
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute(
+        "download",
+        `pangan_data_${new Date().toISOString().split("T")[0]}.${format}`
+      );
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      return { success: true, message: "Data exported successfully" };
+    } catch (error) {
+      console.error("Export error:", error);
+      throw error;
     }
   },
 };

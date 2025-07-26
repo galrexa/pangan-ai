@@ -11,34 +11,25 @@ import {
   Button,
   CssBaseline,
   ThemeProvider,
-  createTheme,
 } from "@mui/material";
-import { Assessment, TrendingUp, Chat, Home } from "@mui/icons-material";
+
+import theme from "./styles/theme";
+
+import {
+  Assessment,
+  TrendingUp,
+  Chat,
+  Home,
+  Timeline,
+} from "@mui/icons-material";
 
 // Import components
 import NewPredictionPage from "./components/Prediction/NewPredictionPage";
-import ChatInterface from "./components/Chat/ChatInterface";
-// Import existing components if needed
-// import HistoricalDashboard from './components/Dashboard/HistoricalDashboard';
-
-// Create theme
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: "#1976d2",
-    },
-    secondary: {
-      main: "#388e3c",
-    },
-  },
-  typography: {
-    fontFamily: "Roboto, Arial, sans-serif",
-  },
-});
+import LazyHistoricalDashboard from "./components/Dashboard/LazyHistoricalDashboard";
 
 // Simple Home Component
 const HomePage = () => (
-  <Container maxWidth="lg" sx={{ py: 4 }}>
+  <Container maxWidth="lg" sx={{ py: 2 }}>
     <Box sx={{ textAlign: "center", mb: 6 }}>
       <Typography variant="h3" sx={{ fontWeight: "bold", mb: 2 }}>
         🌾 PANGAN-AI
@@ -60,6 +51,16 @@ const HomePage = () => (
           flexWrap: "wrap",
         }}
       >
+        <Button
+          component={Link}
+          to="/history"
+          variant="contained"
+          size="large"
+          startIcon={<Timeline />}
+          sx={{ px: 4 }}
+        >
+          Monitor Harga
+        </Button>
         <Button
           component={Link}
           to="/prediction"
@@ -84,13 +85,13 @@ const HomePage = () => (
     >
       <Box
         sx={{
-          p: 3,
+          p: 2,
           border: "1px solid #ddd",
           borderRadius: 2,
           textAlign: "center",
         }}
       >
-        <TrendingUp sx={{ fontSize: 48, color: "primary.main", mb: 2 }} />
+        <TrendingUp sx={{ fontSize: 40, color: "primary.main", mb: 2 }} />
         <Typography variant="h6" gutterBottom>
           Prediksi Akurat
         </Typography>
@@ -102,13 +103,13 @@ const HomePage = () => (
 
       <Box
         sx={{
-          p: 3,
+          p: 2,
           border: "1px solid #ddd",
           borderRadius: 2,
           textAlign: "center",
         }}
       >
-        <Assessment sx={{ fontSize: 48, color: "primary.main", mb: 2 }} />
+        <Assessment sx={{ fontSize: 40, color: "primary.main", mb: 2 }} />
         <Typography variant="h6" gutterBottom>
           Analisis Mendalam
         </Typography>
@@ -119,13 +120,13 @@ const HomePage = () => (
 
       <Box
         sx={{
-          p: 3,
+          p: 2,
           border: "1px solid #ddd",
           borderRadius: 2,
           textAlign: "center",
         }}
       >
-        <Chat sx={{ fontSize: 48, color: "primary.main", mb: 2 }} />
+        <Chat sx={{ fontSize: 40, color: "primary.main", mb: 2 }} />
         <Typography variant="h6" gutterBottom>
           AI Insights
         </Typography>
@@ -157,18 +158,18 @@ const Navigation = () => (
         <Button
           color="inherit"
           component={Link}
-          to="/prediction"
-          startIcon={<TrendingUp />}
+          to="/history"
+          startIcon={<Timeline />}
         >
-          Prediksi
+          Monitor Harga
         </Button>
         <Button
           color="inherit"
           component={Link}
-          to="/chat"
+          to="/prediction"
           startIcon={<TrendingUp />}
         >
-          Chat AI
+          Prediksi
         </Button>
       </Box>
     </Toolbar>
@@ -187,7 +188,8 @@ function App() {
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/prediction" element={<NewPredictionPage />} />
-            <Route path="/chat" element={<ChatInterface />} />
+            <Route path="/history" element={<LazyHistoricalDashboard />} />
+            {/* <Route path="/chat" element={<ChatInterface />} /> */}
           </Routes>
 
           {/* Footer */}
@@ -201,7 +203,7 @@ function App() {
                 align="center"
                 sx={{ mt: 1, opacity: 0.8 }}
               >
-                Dikembangkan untuk Kantor Staf Presiden (KSP)
+                Dikembangkan oleh V3 Squad untuk LAN Datathon 2025
               </Typography>
             </Container>
           </Box>

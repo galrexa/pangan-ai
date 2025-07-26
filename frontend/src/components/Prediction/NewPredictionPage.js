@@ -1,6 +1,6 @@
 // frontend/src/components/Prediction/NewPredictionPage.js
 // BRAND NEW SIMPLE PREDICTION PAGE
-
+/* eslint-disable no-unused-vars */
 import React, { useState } from "react";
 import {
   Container,
@@ -8,40 +8,22 @@ import {
   CardContent,
   Typography,
   Box,
-  Grid,
+  Grid, // Ensure Grid is imported
   Button,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
   Alert,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   CircularProgress,
   Chip,
-  Divider,
-  ToggleButton,
-  ToggleButtonGroup,
   Slider,
 } from "@mui/material";
-import {
-  TrendingUp,
-  Assessment,
-  Schedule,
-  PriceChange,
-  ShowChart,
-  TableChart,
-} from "@mui/icons-material";
+import { TrendingUp, Assessment, Schedule } from "@mui/icons-material";
 import Plot from "react-plotly.js";
 import axios from "axios";
-import PredictionResults from "./PredictionResults";
-import AIInsights from "./AIInsights";
 import PredictionAdapter from "./PredictionAdapter";
+import AIChat from "./AIChat"; // Import AIChat
 
 const NewPredictionPage = () => {
   // VIRTUAL DATE - sesuai dengan dataset terakhir
@@ -56,7 +38,7 @@ const NewPredictionPage = () => {
   const [loading, setLoading] = useState(false);
   const [predictionResult, setPredictionResult] = useState(null);
   const [error, setError] = useState(null);
-  const [viewMode, setViewMode] = useState("chart"); // "chart" or "table"
+  // const [viewMode, setViewMode] = useState("chart"); // "chart" or "table"
 
   // Options
   const commodityOptions = [
@@ -581,26 +563,15 @@ const NewPredictionPage = () => {
         historicalDays={historicalDays}
       />
 
-      {/* Debug Info */}
-      {predictionResult && (
-        <Card sx={{ mt: 4, bgcolor: "grey.50" }}>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              🔧 Debug Info
-            </Typography>
-            <Typography
-              variant="body2"
-              component="pre"
-              sx={{ fontSize: "0.8rem", overflow: "auto" }}
-            >
-              Model: {predictionResult.model_used || "N/A"} | Confidence:{" "}
-              {predictionResult.confidence || "N/A"} | Virtual Date:{" "}
-              {DATASET_MAX_DATE} | Base Date:{" "}
-              {predictionResult.base_date || "N/A"}
-            </Typography>
-          </CardContent>
-        </Card>
-      )}
+      {/* AI Chat Integration */}
+      <Grid container spacing={4} sx={{ mt: 4 }}>
+        <Grid item xs={12}>
+          <AIChat
+            formData={{ komoditas: commodity, wilayah: region }}
+            predictionData={predictionResult}
+          />
+        </Grid>
+      </Grid>
     </Container>
   );
 };

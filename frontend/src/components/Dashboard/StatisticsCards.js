@@ -1,7 +1,7 @@
 // File: frontend/src/components/Dashboard/StatisticsCards.js
-// MODIFIED VERSION - No Weather, Add Min/Max Price
+// LIGHTWEIGHT VERSION - Minimal client-side processing
 
-import React from "react";
+import React, { useMemo } from "react";
 import {
   Grid,
   Card,
@@ -24,24 +24,101 @@ import {
 import {
   formatCurrency,
   formatNumber,
-  calculatePercentageChange,
+  //calculatePercentageChange,
 } from "../../utils/helpers";
 
 const StatisticsCards = ({
   statistics = {},
   eventStats = {},
   loading = false,
+  priceData = [],
+  filters = {},
 }) => {
+  // LIGHTWEIGHT filtering - hanya filter dan hitung basic stats
+  const filteredStatistics = useMemo(() => {
+    if (!priceData.length) {
+      return statistics; // Fallback ke original statistics
+    }
+
+    // Simple filtering
+    let filtered = [...priceData]; // Make a copy
+
+    // Filter by wilayah (simplified)
+    if (filters.wilayah && filters.wilayah !== "all") {
+      if (Array.isArray(filters.wilayah) && !filters.wilayah.includes("all")) {
+        filtered = filtered.filter((item) =>
+          filters.wilayah.includes(item.region)
+        );
+      } else if (!Array.isArray(filters.wilayah)) {
+        filtered = filtered.filter((item) => item.region === filters.wilayah);
+      }
+    }
+
+    // Filter by komoditas (simplified)
+    if (filters.komoditas && filters.komoditas !== "all") {
+      filtered = filtered.filter(
+        (item) => item.commodity === filters.komoditas
+      );
+    }
+
+    // Quick calculation (tidak complex)
+    const prices = filtered.map((item) => item.price).filter((p) => p > 0);
+
+    if (prices.length === 0) {
+      return {
+        ...statistics,
+        data_points: 0,
+        current_price: 0,
+        avg_price: 0,
+        min_price: 0,
+        max_price: 0,
+        price_change_percent: 0,
+      };
+    }
+
+    // Simple stats only
+    const min_price = Math.min(...prices);
+    const max_price = Math.max(...prices);
+    const avg_price = Math.round(
+      prices.reduce((a, b) => a + b, 0) / prices.length
+    );
+    const current_price = prices[prices.length - 1] || 0;
+    const previous_price = prices[prices.length - 2] || current_price;
+
+    // Simple price change
+    const price_change_percent =
+      previous_price > 0
+        ? Math.round(
+            ((current_price - previous_price) / previous_price) * 100 * 100
+          ) / 100
+        : 0;
+
+    const calculatedStats = {
+      ...statistics, // Keep original complex calculations
+      // Override with filtered simple calculations
+      current_price: Math.round(current_price),
+      previous_price: Math.round(previous_price),
+      avg_price,
+      min_price: Math.round(min_price),
+      max_price: Math.round(max_price),
+      data_points: prices.length,
+      price_change_percent,
+      // Keep original volatility (too complex to recalculate)
+      price_volatility: statistics.price_volatility || 0,
+    };
+    return calculatedStats;
+  }, [priceData, filters, statistics]);
+
   const {
     current_price = 0,
-    previous_price = 0,
+    //previous_price = 0,
     avg_price = 0,
     min_price = 0,
     max_price = 0,
     price_volatility = 0,
-  } = statistics;
-
-  const priceChange = calculatePercentageChange(current_price, previous_price);
+    data_points = 0,
+    price_change_percent = 0,
+  } = filteredStatistics;
 
   const getTrendIcon = (change) => {
     if (Math.abs(change) < 1) return <TrendingFlat color="success" />;
@@ -59,39 +136,42 @@ const StatisticsCards = ({
 
   const cards = [
     {
-      title: "Harga Terakhir", // ✅ Changed from "Harga Saat Ini"
+      title: "Harga Terakhir",
       value: formatCurrency(current_price),
-      subtitle: `${priceChange >= 0 ? "+" : ""}${formatNumber(
-        priceChange,
+      subtitle: `${price_change_percent >= 0 ? "+" : ""}${formatNumber(
+        price_change_percent,
         2
       )}% dari periode sebelumnya`,
       icon: <AttachMoney />,
-      color: getTrendColor(priceChange),
-      trend: getTrendIcon(priceChange),
+      color: getTrendColor(price_change_percent),
+      trend: getTrendIcon(price_change_percent),
     },
     {
       title: "Harga Rata-rata",
       value: formatCurrency(avg_price),
-      subtitle: `Berdasarkan semua data periode ini`,
+      subtitle:
+        data_points > 0
+          ? `Berdasarkan ${data_points} data points`
+          : "Berdasarkan semua data periode ini",
       icon: <Assessment />,
       color: "info",
     },
     {
-      title: "Harga Tertinggi", // ✅ New Card
+      title: "Harga Tertinggi",
       value: formatCurrency(max_price),
       subtitle: `Peak harga dalam periode ini`,
       icon: <KeyboardArrowUp />,
       color: "error",
     },
     {
-      title: "Harga Terendah", // ✅ New Card
+      title: "Harga Terendah",
       value: formatCurrency(min_price),
       subtitle: `Lowest harga dalam periode ini`,
       icon: <KeyboardArrowDown />,
       color: "success",
     },
     {
-      title: "Volatilitas", // ✅ Keep with explanation
+      title: "Volatilitas",
       value: `${formatNumber(price_volatility, 2)}%`,
       subtitle:
         price_volatility > 15
@@ -190,7 +270,7 @@ const StatisticsCards = ({
         </Grid>
       ))}
 
-      {/* Event Indicators - Enhanced Display */}
+      {/* Event Indicators */}
       {eventStats.active_events && eventStats.active_events.length > 0 && (
         <Grid item xs={12}>
           <Card>
@@ -213,10 +293,14 @@ const StatisticsCards = ({
                 <Box
                   sx={{ display: "flex", gap: 1, flexWrap: "wrap", flex: 1 }}
                 >
-                  {eventStats.active_events.map((event) => (
+                  {eventStats.active_events.map((event, index) => (
                     <Chip
-                      key={event.name}
-                      label={`${event.name} (~${event.impact}% dampak)`}
+                      key={event.name || index}
+                      label={
+                        typeof event === "string"
+                          ? event
+                          : `${event.name} (~${event.impact}% dampak)`
+                      }
                       color="warning"
                       size="small"
                       icon={<Event />}
@@ -244,9 +328,26 @@ const StatisticsCards = ({
             >
               📊 <strong>Ringkasan:</strong> Harga berkisar antara{" "}
               {formatCurrency(min_price)} - {formatCurrency(max_price)}
-              {statistics.data_points &&
-                ` berdasarkan ${statistics.data_points} data points`}
+              {data_points > 0 && ` berdasarkan ${data_points} data points`}
               {statistics.date_range && ` periode ${statistics.date_range}`}
+              {/* Show filter info jika ada */}
+              {filters.wilayah && filters.wilayah !== "all" && (
+                <span>
+                  {" "}
+                  untuk wilayah{" "}
+                  <strong>
+                    {Array.isArray(filters.wilayah)
+                      ? filters.wilayah.join(", ")
+                      : filters.wilayah}
+                  </strong>
+                </span>
+              )}
+              {filters.komoditas && filters.komoditas !== "all" && (
+                <span>
+                  {" "}
+                  komoditas <strong>{filters.komoditas}</strong>
+                </span>
+              )}
             </Typography>
           </CardContent>
         </Card>
