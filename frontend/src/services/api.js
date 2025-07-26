@@ -142,7 +142,7 @@ const apiService = {
           predictionRequest.prediction_days ||
           predictionRequest.days_ahead ||
           7,
-        prediction_type: "DAILY",
+        prediction_type: "daily",
         include_confidence: true,
         include_factors: true,
       };

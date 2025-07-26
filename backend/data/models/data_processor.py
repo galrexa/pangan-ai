@@ -1,3 +1,4 @@
+# backend/data/models/data_processor.py - FIXED TO MATCH 28 FEATURES
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
@@ -11,6 +12,7 @@ logger = logging.getLogger(__name__)
 class DataProcessor:
     """
     Handles data loading, preprocessing, and feature engineering for PANGAN-AI
+    Updated to match 28-feature LSTM model
     """
     
     def __init__(self, dataset_path: str):
@@ -20,11 +22,25 @@ class DataProcessor:
         self.commodities = []
         self.regions = []
         
-        # Feature columns sesuai dataset existing
+        # Feature columns sesuai model config (28 features total)
         self.price_columns = ['harga']
-        self.weather_columns = ['tavg_final', 'rh_avg_final', 'ff_avg_final', 'rr']
+        self.weather_columns = ['tavg_final', 'rh_avg_final', 'ff_avg_final']
         self.seasonal_columns = ['dum_ramadan', 'dum_idulfitri', 'dum_natal_newyr']
-        self.all_feature_columns = self.price_columns + self.weather_columns + self.seasonal_columns + ['tahun']
+        
+        # Features yang akan dibuat untuk match model config
+        self.model_feature_columns = [
+            "harga",
+            "tavg_final", "rh_avg_final", "ff_avg_final",
+            "month_sin", "month_cos", "day_sin", "day_cos",
+            "is_weekend",
+            "dum_ramadan", "dum_idulfitri", "dum_natal_newyr",
+            "tavg_flag", "rh_avg_flag", "ff_avg_flag", "imputasi_flag",
+            "harga_lag_1", "harga_lag_3", "harga_lag_7", "harga_lag_14",
+            "harga_rolling_mean_7", "harga_rolling_std_7",
+            "harga_rolling_mean_14", "harga_rolling_std_14",
+            "harga_rolling_mean_30", "harga_rolling_std_30",
+            "harga_change_1d", "harga_change_7d"
+        ]
         
     def load_data(self) -> pd.DataFrame:
         """Load dataset from CSV file"""
@@ -55,96 +71,30 @@ class DataProcessor:
             logger.error(f"Error loading dataset: {str(e)}")
             raise
     
-    def _create_mock_dataset(self) -> pd.DataFrame:
-        """Create mock dataset for development purposes"""
-        
-        # 3 komoditas prioritas sesuai proposal
-        commodities = ['cabai merah keriting', 'cabai rawit merah', 'bawang merah']
-        
-        # 7 wilayah Jawa Barat sesuai proposal  
-        regions = [
-            'kota bandung', 'kota depok', 'kota bekasi', 
-            'kabupaten garut', 'kabupaten bandung', 
-            'kabupaten cianjur', 'kabupaten majalengka'
-        ]
-        
-        # Generate date range 2022-2025
-        date_range = pd.date_range(start='2022-01-01', end='2025-04-30', freq='D')
-        
-        data = []
-        for commodity in commodities:
-            for region in regions:
-                for date in date_range:
-                    # Base price dengan volatilitas sesuai penelitian
-                    if 'cabai rawit' in commodity:
-                        base_price = 45000
-                        volatility = 0.4  # 40% volatilitas
-                    elif 'cabai merah' in commodity:
-                        base_price = 35000
-                        volatility = 0.3  # 30% volatilitas
-                    elif 'bawang merah' in commodity:
-                        base_price = 25000
-                        volatility = 0.16  # 16% volatilitas
-                    
-                    # Seasonal effects
-                    month = date.month
-                    seasonal_multiplier = 1.0
-                    
-                    # Ramadhan effect (bulan 3-4, 12-1)
-                    is_ramadhan = month in [3, 4, 12, 1]
-                    if is_ramadhan:
-                        seasonal_multiplier *= 1.15
-                    
-                    # Idul Fitri effect
-                    is_idul_fitri = month in [4, 5]
-                    if is_idul_fitri:
-                        seasonal_multiplier *= 1.2
-                    
-                    # Nataru effect
-                    is_nataru = month in [12, 1]
-                    if is_nataru:
-                        seasonal_multiplier *= 1.1
-                    
-                    # Random price with trend
-                    noise = np.random.normal(0, volatility * 0.1)
-                    trend = np.sin(2 * np.pi * date.dayofyear / 365) * 0.1
-                    
-                    final_price = base_price * seasonal_multiplier * (1 + trend + noise)
-                    final_price = max(final_price, base_price * 0.5)  # Floor price
-                    
-                    # Mock weather data
-                    data.append({
-                        'tanggal': date,
-                        'komoditas': commodity,
-                        'wilayah': region,
-                        'harga': round(final_price, 0),
-                        'suhu_rata_rata': np.random.normal(27, 3),
-                        'kelembaban': np.random.normal(75, 10),
-                        'curah_hujan': np.random.exponential(5),
-                        'kecepatan_angin': np.random.normal(8, 2),
-                        'is_ramadhan': is_ramadhan,
-                        'is_idul_fitri': is_idul_fitri,
-                        'is_nataru': is_nataru
-                    })
-        
-        return pd.DataFrame(data)
-    
     def _preprocess_data(self, data: pd.DataFrame) -> pd.DataFrame:
-        """Preprocess and clean the dataset sesuai format existing"""
+        """Preprocess and create 28 features to match model"""
         
         # Convert date column
         data['tanggal'] = pd.to_datetime(data['tanggal'])
         data = data.sort_values(['komoditas', 'wilayah', 'tanggal'])
         
-        # Filter data dengan harga yang valid (bukan NaN dan > 0)
+        # Filter data dengan harga yang valid
         data = data.dropna(subset=['harga'])
         data = data[data['harga'] > 0]
         
-        # Handle missing values pada weather features
-        weather_columns = ['tavg_final', 'rh_avg_final', 'ff_avg_final', 'rr']
+        # Handle missing weather values dan create flags
+        weather_columns = ['tavg_final', 'rh_avg_final', 'ff_avg_final']
         for col in weather_columns:
             if col in data.columns:
+                data[f'{col.replace("_final", "")}_flag'] = data[col].isna().astype(int)
                 data[col] = data[col].fillna(data[col].mean())
+            else:
+                # Create dummy columns if not exist
+                data[col] = 25.0  # Default temperature/humidity
+                data[f'{col.replace("_final", "")}_flag'] = 0
+        
+        # General imputation flag
+        data['imputasi_flag'] = 0
         
         # Ensure seasonal dummy variables exist
         seasonal_columns = ['dum_ramadan', 'dum_idulfitri', 'dum_natal_newyr']
@@ -157,7 +107,50 @@ class DataProcessor:
         data['day_of_year'] = data['tanggal'].dt.dayofyear
         data['day_of_week'] = data['tanggal'].dt.dayofweek
         
+        # Create cyclical features
+        data['month_sin'] = np.sin(2 * np.pi * data['month'] / 12)
+        data['month_cos'] = np.cos(2 * np.pi * data['month'] / 12)
+        data['day_sin'] = np.sin(2 * np.pi * data['day_of_year'] / 365)
+        data['day_cos'] = np.cos(2 * np.pi * data['day_of_year'] / 365)
+        
+        # Weekend indicator
+        data['is_weekend'] = (data['day_of_week'] >= 5).astype(int)
+        
+        # Create lag features dan rolling features per commodity-region group
+        processed_groups = []
+        for (commodity, region), group in data.groupby(['komoditas', 'wilayah']):
+            group = group.sort_values('tanggal').copy()
+            
+            # Lag features
+            group['harga_lag_1'] = group['harga'].shift(1)
+            group['harga_lag_3'] = group['harga'].shift(3)
+            group['harga_lag_7'] = group['harga'].shift(7)
+            group['harga_lag_14'] = group['harga'].shift(14)
+            
+            # Rolling features
+            group['harga_rolling_mean_7'] = group['harga'].rolling(window=7, min_periods=1).mean()
+            group['harga_rolling_std_7'] = group['harga'].rolling(window=7, min_periods=1).std().fillna(0)
+            group['harga_rolling_mean_14'] = group['harga'].rolling(window=14, min_periods=1).mean()
+            group['harga_rolling_std_14'] = group['harga'].rolling(window=14, min_periods=1).std().fillna(0)
+            group['harga_rolling_mean_30'] = group['harga'].rolling(window=30, min_periods=1).mean()
+            group['harga_rolling_std_30'] = group['harga'].rolling(window=30, min_periods=1).std().fillna(0)
+            
+            # Change features
+            group['harga_change_1d'] = group['harga'].pct_change(1).fillna(0)
+            group['harga_change_7d'] = group['harga'].pct_change(7).fillna(0)
+            
+            processed_groups.append(group)
+        
+        # Combine all groups
+        data = pd.concat(processed_groups, ignore_index=True)
+        
+        # Fill NaN values in lag features dengan forward fill
+        lag_columns = ['harga_lag_1', 'harga_lag_3', 'harga_lag_7', 'harga_lag_14']
+        for col in lag_columns:
+            data[col] = data[col].fillna(method='ffill').fillna(data['harga'])
+        
         logger.info(f"Data preprocessing completed: {len(data)} valid records")
+        logger.info(f"Features created: {len(self.model_feature_columns)} (target: 28)")
         return data
     
     def get_commodity_data(self, commodity: str, region: str = None) -> pd.DataFrame:
@@ -172,10 +165,53 @@ class DataProcessor:
         
         return filtered_data.sort_values('tanggal')
     
+    def get_latest_sequence(self, commodity: str, region: str, 
+                           sequence_length: int = 30) -> Tuple[np.ndarray, MinMaxScaler]:
+        """Get latest sequence for prediction with 28 features"""
+        
+        data = self.get_commodity_data(commodity, region)
+        
+        if len(data) < sequence_length:
+            raise ValueError(f"Insufficient data for prediction: {len(data)} < {sequence_length}")
+        
+        # Get latest data
+        latest_data = data.tail(sequence_length).copy()
+        
+        # Select 28 features sesuai model config
+        feature_columns = self.model_feature_columns
+        
+        # Pastikan semua kolom ada
+        missing_cols = [col for col in feature_columns if col not in latest_data.columns]
+        if missing_cols:
+            logger.warning(f"Missing columns: {missing_cols}")
+            for col in missing_cols:
+                latest_data[col] = 0
+        
+        # Get features dalam urutan yang benar
+        features = latest_data[feature_columns].fillna(0).values
+        
+        # Scale features
+        scaler_key = f"{commodity}_{region}"
+        if scaler_key not in self.scalers:
+            # Fit scaler menggunakan semua data historical
+            self.scalers[scaler_key] = MinMaxScaler()
+            all_data = self.get_commodity_data(commodity, region)
+            all_features = all_data[feature_columns].fillna(0).values
+            self.scalers[scaler_key].fit(all_features)
+        
+        scaled_features = self.scalers[scaler_key].transform(features)
+        
+        # Reshape for LSTM input (1, sequence_length, n_features)
+        X = scaled_features.reshape(1, sequence_length, len(feature_columns))
+        
+        logger.info(f"Latest sequence shape: {X.shape} (should be (1, {sequence_length}, 28))")
+        
+        return X, self.scalers[scaler_key]
+    
     def prepare_lstm_data(self, commodity: str, region: str, 
                          sequence_length: int = 30) -> Tuple[np.ndarray, np.ndarray, MinMaxScaler]:
         """
-        Prepare data for LSTM model sesuai dengan format existing model
+        Prepare data for LSTM model dengan 28 features
         Returns: (X, y, scaler)
         """
         
@@ -185,18 +221,17 @@ class DataProcessor:
         if len(data) < sequence_length + 1:
             raise ValueError(f"Insufficient data for {commodity} in {region}: {len(data)} < {sequence_length + 1}")
         
-        # Select features sesuai dengan model existing (28 features total)
-        feature_columns = self.all_feature_columns + ['month', 'day_of_year', 'day_of_week']
+        # Select 28 features sesuai model config
+        feature_columns = self.model_feature_columns
         
         # Pastikan semua kolom ada
         missing_cols = [col for col in feature_columns if col not in data.columns]
         if missing_cols:
             logger.warning(f"Missing columns: {missing_cols}")
-            # Add missing columns dengan default values
             for col in missing_cols:
                 data[col] = 0
         
-        features = data[feature_columns].values
+        features = data[feature_columns].fillna(0).values
         
         # Scale features
         scaler_key = f"{commodity}_{region}"
@@ -213,44 +248,6 @@ class DataProcessor:
             y.append(scaled_features[i, 0])  # Price is first column
         
         return np.array(X), np.array(y), self.scalers[scaler_key]
-    
-    def get_latest_sequence(self, commodity: str, region: str, 
-                           sequence_length: int = 30) -> Tuple[np.ndarray, MinMaxScaler]:
-        """Get latest sequence for prediction sesuai format existing"""
-        
-        data = self.get_commodity_data(commodity, region)
-        
-        if len(data) < sequence_length:
-            raise ValueError(f"Insufficient data for prediction: {len(data)} < {sequence_length}")
-        
-        # Get latest data
-        latest_data = data.tail(sequence_length)
-        
-        # Select features (28 features total)
-        feature_columns = self.all_feature_columns + ['month', 'day_of_year', 'day_of_week']
-        
-        # Pastikan semua kolom ada
-        missing_cols = [col for col in feature_columns if col not in latest_data.columns]
-        if missing_cols:
-            for col in missing_cols:
-                latest_data[col] = 0
-        
-        features = latest_data[feature_columns].values
-        
-        # Scale features
-        scaler_key = f"{commodity}_{region}"
-        if scaler_key not in self.scalers:
-            # Fit scaler menggunakan semua data historical
-            self.scalers[scaler_key] = MinMaxScaler()
-            all_features = data[feature_columns].fillna(0).values
-            self.scalers[scaler_key].fit(all_features)
-        
-        scaled_features = self.scalers[scaler_key].transform(features)
-        
-        # Reshape for LSTM input (1, sequence_length, n_features)
-        X = scaled_features.reshape(1, sequence_length, len(feature_columns))
-        
-        return X, self.scalers[scaler_key]
     
     def get_statistics(self, commodity: str, region: str = None) -> Dict:
         """Get statistical summary of commodity data"""

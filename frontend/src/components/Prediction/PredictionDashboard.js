@@ -1,3 +1,4 @@
+// frontend/src/components/Prediction/PredictionDashboard.js - FIXED VERSION
 import React, { useState, useEffect } from "react";
 import {
   Container,
@@ -10,8 +11,10 @@ import {
 } from "@mui/material";
 import PredictionForm from "./PredictionForm";
 import PredictionResults from "./PredictionResults";
+import SimplePredictionDebug from "./SimplePredictionDebug";
+import SimpleResultsDisplay from "./SimpleResultsDisplay";
 import AIInsights from "./AIInsights";
-import AIChat from "./AIChat"; // Import the new AIChat component
+import AIChat from "./AIChat";
 import apiService from "../../services/api";
 
 const PredictionDashboard = () => {
@@ -21,7 +24,7 @@ const PredictionDashboard = () => {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
 
-  // Available options for form (could be fetched from API)
+  // Available options for form
   const [availableRegions, setAvailableRegions] = useState([]);
   const [availableCommodities, setAvailableCommodities] = useState([]);
 
@@ -36,11 +39,11 @@ const PredictionDashboard = () => {
         apiService.getCommodities(),
       ]);
 
-      setAvailableRegions(regionsResponse.data);
-      setAvailableCommodities(commoditiesResponse.data);
+      setAvailableRegions(regionsResponse.data || []);
+      setAvailableCommodities(commoditiesResponse.data || []);
     } catch (err) {
       console.error("Error loading form options:", err);
-      // Continue with default options from constants
+      // Continue with default options
     }
   };
 
@@ -51,30 +54,27 @@ const PredictionDashboard = () => {
 
     try {
       const response = await apiService.generatePrediction(formValues);
+      console.log("📊 Raw API Response:", response);
 
-      // Process the prediction response
+      // FIXED: Handle direct response structure (no nested .data)
       const processedData = {
-        ...response.data,
-        // Add any additional processing here
+        ...response, // Use response directly, not response.data
         request_params: formValues,
       };
 
+      console.log("✅ Processed prediction data:", processedData);
       setPredictionData(processedData);
       setSuccess(true);
     } catch (err) {
-      console.error("Error generating prediction:", err);
+      console.error("❌ Error generating prediction:", err);
       setError("Gagal menghasilkan prediksi. Silakan coba lagi.");
-
-      // For demo purposes, generate mock prediction data
-      setPredictionData(generateMockPrediction(formValues));
-      setSuccess(true);
     } finally {
       setLoading(false);
     }
   };
 
   const generateMockPrediction = (formValues) => {
-    const { prediction_days, komoditas } = formValues;
+    const { prediction_days = 7, komoditas } = formValues;
     const basePrice = getBasePriceForCommodity(komoditas);
 
     // Generate mock historical data
@@ -98,10 +98,10 @@ const PredictionDashboard = () => {
       date.setDate(date.getDate() + i);
 
       // Simulate price changes with some trend
-      const change = (Math.random() - 0.5) * 0.05 + 0.001 * i; // Slight upward trend
+      const change = (Math.random() - 0.5) * 0.05 + 0.001 * i;
       currentPrice = currentPrice * (1 + change);
 
-      const confidence = Math.max(0.7, 0.95 - i * 0.02); // Decreasing confidence over time
+      const confidence = Math.max(0.7, 0.95 - i * 0.02);
       const margin = currentPrice * (1 - confidence) * 0.5;
 
       predictions.push({
@@ -123,6 +123,7 @@ const PredictionDashboard = () => {
     const changePercent = ((finalPrice - initialPrice) / initialPrice) * 100;
 
     return {
+      success: true,
       historical_data,
       predictions,
       confidence_intervals,
@@ -153,16 +154,17 @@ const PredictionDashboard = () => {
             ? "Prediksi menunjukkan fluktuasi sedang yang normal untuk komoditas ini"
             : "Prediksi menunjukkan stabilitas harga yang baik",
       },
+      request_params: formValues,
     };
   };
 
   const getBasePriceForCommodity = (commodity) => {
     const basePrices = {
-      "Cabai Rawit Merah": 120000,
-      "Cabai Merah Keriting": 95000,
-      "Bawang Merah": 45000,
+      "Cabai Rawit Merah": 45000,
+      "Cabai Merah Keriting": 35000,
+      "Bawang Merah": 28000,
     };
-    return basePrices[commodity] || 100000;
+    return basePrices[commodity] || 40000;
   };
 
   return (
@@ -178,6 +180,10 @@ const PredictionDashboard = () => {
       </Box>
 
       <Grid container spacing={4}>
+        {/* Prediction Debug */}
+        <Grid item xs={12}>
+          <SimplePredictionDebug />
+        </Grid>
         {/* Prediction Form */}
         <Grid item xs={12}>
           <PredictionForm
@@ -188,15 +194,27 @@ const PredictionDashboard = () => {
           />
         </Grid>
 
+        {/* Debug Info - Remove in production */}
+        {predictionData && (
+          <Grid item xs={12}>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              <Typography variant="body2">
+                <strong>Debug:</strong> Prediction data loaded successfully.
+                Success: {predictionData.success ? "Yes" : "No"}, Predictions:{" "}
+                {predictionData.predictions?.length || 0} items
+              </Typography>
+            </Alert>
+          </Grid>
+        )}
+
         {/* Prediction Results */}
         {(predictionData || loading) && (
           <Grid item xs={12}>
             <Fade in timeout={500}>
               <div>
-                <PredictionResults
+                <SimpleResultsDisplay
                   predictionData={predictionData}
                   loading={loading}
-                  error={error}
                 />
               </div>
             </Fade>
@@ -210,8 +228,8 @@ const PredictionDashboard = () => {
               <Fade in timeout={800}>
                 <div>
                   <AIInsights
+                    filters={formData} // FIXED: Pass formData as filters
                     predictionData={predictionData}
-                    formData={formData}
                     loading={loading}
                   />
                 </div>

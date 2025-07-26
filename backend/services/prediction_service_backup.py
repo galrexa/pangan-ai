@@ -1,4 +1,3 @@
-# backend/services/prediction_service.py - FIXED VERSION
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
 import logging
@@ -38,31 +37,6 @@ class PredictionService:
             logger.info("✅ Historical data loaded and ready")
         else:
             logger.warning("⚠️ Historical data not loaded")
-    
-    def _convert_numpy_types(self, obj):
-        """Convert numpy types to Python native types - COMPREHENSIVE VERSION"""
-        if isinstance(obj, dict):
-            return {k: self._convert_numpy_types(v) for k, v in obj.items()}
-        elif isinstance(obj, list):
-            return [self._convert_numpy_types(v) for v in obj]
-        elif isinstance(obj, np.bool_):
-            return bool(obj)
-        elif isinstance(obj, (np.integer, np.signedinteger, np.unsignedinteger)):
-            return int(obj)
-        elif isinstance(obj, (np.floating, np.float16, np.float32, np.float64)):
-            return float(obj)
-        elif isinstance(obj, np.ndarray):
-            return obj.tolist()
-        elif isinstance(obj, np.generic):
-            return obj.item()
-        elif hasattr(obj, 'dtype'):
-            # Additional catch for any numpy types
-            try:
-                return obj.item()
-            except:
-                return str(obj)
-        else:
-            return obj
     
     def generate_prediction(self, commodity: str, region: str, days_ahead: int = 7) -> Dict:
         """
@@ -119,9 +93,7 @@ class PredictionService:
             enhanced_result['region'] = region
             
             logger.info(f"✅ Prediction generated for {commodity} - {region}")
-            
-            # CRITICAL: Convert all numpy types before returning
-            return self._convert_numpy_types(enhanced_result)
+            return enhanced_result
             
         except Exception as e:
             logger.error(f"❌ Error generating prediction: {str(e)}")
@@ -202,7 +174,7 @@ class PredictionService:
         return enhanced_result
     
     def _analyze_price_trend(self, predictions: List[float], current_price: float) -> Dict:
-        """Analyze price trend dari predictions - FIXED VERSION"""
+        """Analyze price trend dari predictions"""
         
         all_prices = [current_price] + predictions
         
@@ -218,21 +190,21 @@ class PredictionService:
         else:
             trend_direction = "STABLE"
         
-        # Calculate volatility - SAFE CONVERSION
-        price_volatility = float(np.std(predictions) / np.mean(predictions) * 100) if len(predictions) > 1 else 0.0
+        # Calculate volatility
+        price_volatility = np.std(predictions) / np.mean(predictions) * 100 if len(predictions) > 1 else 0
         
         return {
             'direction': trend_direction,
-            'total_change': float(round(price_change_total, 0)),
-            'total_change_pct': float(round(price_change_pct_total, 2)),
-            'volatility_pct': float(round(price_volatility, 2)),
-            'highest_price': float(round(max(predictions), 0)),
-            'lowest_price': float(round(min(predictions), 0)),
-            'average_price': float(round(np.mean(predictions), 0))
+            'total_change': round(price_change_total, 0),
+            'total_change_pct': round(price_change_pct_total, 2),
+            'volatility_pct': round(price_volatility, 2),
+            'highest_price': round(max(predictions), 0),
+            'lowest_price': round(min(predictions), 0),
+            'average_price': round(np.mean(predictions), 0)
         }
     
     def _assess_price_risk(self, predictions: List[float], current_price: float) -> Dict:
-        """Assess price risk level - FIXED VERSION"""
+        """Assess price risk level"""
         
         max_price = max(predictions)
         min_price = min(predictions)
@@ -252,69 +224,73 @@ class PredictionService:
             risk_message = "Stable price movement expected"
         
         # Price spike risk
-        max_increase = max([float((p - current_price) / current_price * 100) for p in predictions])
-        max_decrease = min([float((p - current_price) / current_price * 100) for p in predictions])
+        max_increase = max([(p - current_price) / current_price * 100 for p in predictions])
+        max_decrease = min([(p - current_price) / current_price * 100 for p in predictions])
         
         return {
             'risk_level': risk_level,
             'risk_message': risk_message,
-            'price_range_pct': float(round(price_range_pct, 2)),
-            'max_increase_pct': float(round(max_increase, 2)),
-            'max_decrease_pct': float(round(abs(max_decrease), 2)),
-            'upside_risk': bool(max_increase > 15),  # EXPLICIT BOOL CONVERSION
-            'downside_risk': bool(max_decrease < -15)  # EXPLICIT BOOL CONVERSION
+            'price_range_pct': round(price_range_pct, 2),
+            'max_increase_pct': round(max_increase, 2),
+            'max_decrease_pct': round(abs(max_decrease), 2),
+            'upside_risk': max_increase > 15,
+            'downside_risk': max_decrease < -15
         }
     
     def _compare_with_historical(self, commodity: str, region: str, 
                                predictions: List[float]) -> Dict:
-        """Compare predictions dengan historical patterns - FIXED VERSION"""
+        """Compare predictions dengan historical patterns"""
         
         try:
             # Get historical data
             data = self.data_processor.get_commodity_data(commodity, region)
             
-            if len(data) < 30:
-                return {
-                    'comparison_available': False,
-                    'message': 'Insufficient historical data for comparison'
-                }
+            if len(data) < 90:  # Need at least 3 months
+                return {'available': False}
             
-            # Calculate historical statistics
-            historical_prices = data['harga'].astype(float).tolist()
-            historical_mean = float(np.mean(historical_prices))
-            historical_std = float(np.std(historical_prices))
+            # Historical statistics
+            historical_prices = data['harga'].values
+            historical_mean = np.mean(historical_prices)
+            historical_std = np.std(historical_prices)
             
-            # Compare with predictions
-            predicted_mean = float(np.mean(predictions))
-            predicted_max = float(max(predictions))
-            predicted_min = float(min(predictions))
+            # Seasonal comparison (same month last year)
+            current_month = data['tanggal'].iloc[-1].month
+            same_month_data = data[data['tanggal'].dt.month == current_month]
+            seasonal_avg = np.mean(same_month_data['harga']) if len(same_month_data) > 0 else historical_mean
+            
+            # Compare predictions dengan historical range
+            pred_avg = np.mean(predictions)
             
             return {
-                'comparison_available': True,
-                'historical_mean': float(round(historical_mean, 0)),
-                'historical_std': float(round(historical_std, 0)),
-                'predicted_mean': float(round(predicted_mean, 0)),
-                'mean_difference_pct': float(round((predicted_mean - historical_mean) / historical_mean * 100, 2)),
-                'above_historical_range': bool(predicted_max > historical_mean + 2 * historical_std),
-                'below_historical_range': bool(predicted_min < historical_mean - 2 * historical_std)
+                'available': True,
+                'historical_avg': round(historical_mean, 0),
+                'historical_std': round(historical_std, 0),
+                'seasonal_avg': round(seasonal_avg, 0),
+                'prediction_vs_historical': round((pred_avg - historical_mean) / historical_mean * 100, 2),
+                'prediction_vs_seasonal': round((pred_avg - seasonal_avg) / seasonal_avg * 100, 2),
+                'within_normal_range': abs(pred_avg - historical_mean) <= 2 * historical_std
             }
             
         except Exception as e:
             logger.error(f"Error in historical comparison: {str(e)}")
-            return {
-                'comparison_available': False,
-                'error': str(e)
-            }
+            return {'available': False}
     
     def _generate_prediction_summary(self, predictions: List[float], current_price: float) -> Dict:
-        """Generate human-readable summary - FIXED VERSION"""
+        """Generate human-readable prediction summary"""
         
         final_price = predictions[-1]
-        total_change_pct = ((final_price - current_price) / current_price * 100) if current_price > 0 else 0
+        total_change = final_price - current_price
+        total_change_pct = (total_change / current_price * 100) if current_price > 0 else 0
         
-        # Generate summary text
-        if total_change_pct > 5:
-            summary_text = f"Harga diprediksi naik sebesar {total_change_pct:.1f}%"
+        # Generate summary message
+        if total_change_pct > 10:
+            summary_text = f"Harga diprediksi naik signifikan sebesar {abs(total_change_pct):.1f}%"
+            recommendation = "Siap-siap intervensi untuk stabilisasi harga"
+        elif total_change_pct > 5:
+            summary_text = f"Harga diprediksi naik moderat sebesar {abs(total_change_pct):.1f}%"
+            recommendation = "Monitor perkembangan harga secara intensif"
+        elif total_change_pct < -10:
+            summary_text = f"Harga diprediksi turun signifikan sebesar {abs(total_change_pct):.1f}%"
             recommendation = "Pastikan kualitas dan pasokan tetap terjaga"
         elif total_change_pct < -5:
             summary_text = f"Harga diprediksi turun moderat sebesar {abs(total_change_pct):.1f}%"
@@ -330,13 +306,13 @@ class PredictionService:
         }
     
     def _calculate_confidence_level(self, predictions: List[float]) -> str:
-        """Calculate confidence level berdasarkan prediction stability - FIXED VERSION"""
+        """Calculate confidence level berdasarkan prediction stability"""
         
         if len(predictions) < 2:
             return 'medium'
         
-        # Calculate coefficient of variation - SAFE CONVERSION
-        cv = float(np.std(predictions) / np.mean(predictions))
+        # Calculate coefficient of variation
+        cv = np.std(predictions) / np.mean(predictions)
         
         if cv < 0.05:
             return 'high'
@@ -366,48 +342,15 @@ class PredictionService:
                             'error': str(e)
                         }
             
-            return self._convert_numpy_types({
+            return {
                 'success': True,
                 'batch_results': results,
                 'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            })
+            }
             
         except Exception as e:
             logger.error(f"Error in batch prediction: {str(e)}")
             return {
                 'success': False,
                 'error': str(e)
-            }
-    
-    def get_prediction_health_check(self) -> Dict:
-        """Health check untuk prediction service"""
-        
-        try:
-            model_info = self.lstm_predictor.get_model_info()
-            data_status = self.data_service.data_loaded
-            
-            # Determine service status
-            if model_info.get('exists', False) and data_status:
-                service_status = 'healthy'
-            elif not model_info.get('exists', False) and data_status:
-                service_status = 'degraded'  # Mock predictions only
-            else:
-                service_status = 'error'
-            
-            return self._convert_numpy_types({
-                'service_status': service_status,
-                'model_loaded': bool(model_info.get('exists', False)),
-                'data_loaded': bool(data_status),
-                'model_info': model_info,
-                'available_commodities': len(self.data_service.get_available_commodities()),
-                'available_regions': len(self.data_service.get_available_regions()),
-                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            })
-            
-        except Exception as e:
-            logger.error(f"Error in health check: {str(e)}")
-            return {
-                'service_status': 'error',
-                'error': str(e),
-                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             }

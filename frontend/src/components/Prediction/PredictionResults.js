@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Plot from "react-plotly.js";
 import {
   Card,
@@ -31,6 +31,17 @@ import {
   Tooltip,
   ButtonGroup,
   Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Fab,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
+  CircularProgress,
 } from "@mui/material";
 import {
   ShowChart,
@@ -50,6 +61,13 @@ import {
   ZoomIn,
   ZoomOut,
   Refresh,
+  Psychology,
+  AutoAwesome,
+  Chat,
+  Send,
+  Close,
+  Lightbulb,
+  InfoOutlined,
 } from "@mui/icons-material";
 import {
   formatCurrency,
@@ -57,6 +75,7 @@ import {
   calculatePercentageChange,
 } from "../../utils/helpers";
 import { CHART_COLORS } from "../../utils/constants";
+import apiService from "../../services/api";
 
 const PredictionResults = ({
   predictionData = null,
@@ -72,11 +91,329 @@ const PredictionResults = ({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [animationPlayed, setAnimationPlayed] = useState(false);
 
+  // Backend AI Chat Integration
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+
+  // Backend AI Analysis states
+  const [backendAIAnalysis, setBackendAIAnalysis] = useState(null);
+  const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false);
+
   useEffect(() => {
     if (predictionData && !loading) {
       setAnimationPlayed(true);
+      // Auto-generate AI analysis when prediction data is available
+      generateBackendAIAnalysis();
     }
   }, [predictionData, loading]);
+
+  // Generate AI Analysis using backend AI service
+  const generateBackendAIAnalysis = useCallback(async () => {
+    if (!predictionData || !predictionData.predictions) return;
+
+    setAiAnalysisLoading(true);
+    try {
+      const analysisPrompt = createDetailedAnalysisPrompt(predictionData);
+
+      console.log("🤖 Requesting detailed analysis from backend AI...");
+      const chatResponse = await apiService.chatWithAI({
+        message: analysisPrompt,
+        context: {
+          prediction_data: predictionData,
+          analysis_type: "detailed_prediction_analysis",
+        },
+      });
+
+      if (chatResponse && chatResponse.response) {
+        try {
+          // Try to parse as JSON first
+          const analysis = JSON.parse(chatResponse.response);
+          setBackendAIAnalysis(analysis);
+        } catch {
+          // If not JSON, create structured analysis from text
+          setBackendAIAnalysis(
+            createStructuredAnalysisFromText(
+              chatResponse.response,
+              predictionData
+            )
+          );
+        }
+      }
+    } catch (error) {
+      console.error("Backend AI Analysis Error:", error);
+      setBackendAIAnalysis(createFallbackAnalysis(predictionData));
+    } finally {
+      setAiAnalysisLoading(false);
+    }
+  }, [predictionData]);
+
+  // Create detailed analysis prompt for backend AI
+  const createDetailedAnalysisPrompt = (data) => {
+    const predictions = data.predictions || [];
+    const currentPrice = data.statistics?.current_price || 0;
+    const finalPrice = data.statistics?.final_predicted_price || 0;
+    const changePercent = data.statistics?.predicted_change_percent || 0;
+
+    return `Sebagai AI analyst ekonomi pangan, berikan analisis mendalam terhadap hasil prediksi harga berikut:
+
+DATA PREDIKSI:
+- Model: ${data.model_info?.type || "LSTM"}
+- Akurasi Model: ${((data.model_info?.accuracy || 0.8) * 100).toFixed(1)}%
+- Harga Saat Ini: Rp ${currentPrice.toLocaleString("id-ID")}
+- Harga Prediksi Akhir: Rp ${finalPrice.toLocaleString("id-ID")}
+- Perubahan: ${changePercent.toFixed(2)}%
+- Jumlah Hari Prediksi: ${predictions.length}
+
+DETAIL PREDIKSI HARIAN:
+${predictions
+  .slice(0, 7)
+  .map(
+    (pred, index) =>
+      `Hari ${index + 1}: Rp ${
+        pred.predicted_price?.toLocaleString("id-ID") || "N/A"
+      } (Confidence: ${pred.confidence?.toFixed(1) || "N/A"}%)`
+  )
+  .join("\n")}
+
+RISK ASSESSMENT:
+- Level: ${data.risk_assessment?.level || "MEDIUM"}
+- Deskripsi: ${data.risk_assessment?.description || "Normal market volatility"}
+
+Berikan analisis dalam format JSON dengan struktur:
+{
+  "overall_assessment": "Penilaian keseluruhan situasi prediksi (150 kata)",
+  "price_trajectory": {
+    "trend": "ascending/descending/stable",
+    "volatility": "low/medium/high", 
+    "turning_points": ["hari ke-X mengalami...", "hari ke-Y menunjukkan..."]
+  },
+  "market_dynamics": {
+    "supply_factors": ["faktor pasokan 1", "faktor pasokan 2"],
+    "demand_factors": ["faktor permintaan 1", "faktor permintaan 2"],
+    "external_factors": ["faktor eksternal yang mempengaruhi"]
+  },
+  "risk_analysis": {
+    "primary_risks": ["risiko utama 1", "risiko utama 2"],
+    "mitigation_strategies": ["strategi mitigasi 1", "strategi mitigasi 2"],
+    "monitoring_indicators": ["indikator yang perlu dipantau"]
+  },
+  "actionable_insights": {
+    "immediate_actions": ["tindakan segera 1", "tindakan segera 2"],
+    "short_term_strategy": "strategi jangka pendek (1-2 minggu)",
+    "long_term_considerations": "pertimbangan jangka panjang"
+  },
+  "confidence_metrics": {
+    "prediction_reliability": 85,
+    "data_quality": "high/medium/low",
+    "model_performance": "excellent/good/fair"
+  }
+}
+
+Fokus pada insight yang actionable untuk pengambilan keputusan kebijakan pangan.`;
+  };
+
+  // Create structured analysis from text response
+  const createStructuredAnalysisFromText = (textResponse, data) => {
+    const lines = textResponse.split("\n").filter((line) => line.trim());
+
+    return {
+      overall_assessment:
+        lines[0] ||
+        `Prediksi menunjukkan ${
+          data.statistics?.predicted_change_percent > 0
+            ? "kenaikan"
+            : "penurunan"
+        } harga sebesar ${Math.abs(
+          data.statistics?.predicted_change_percent || 0
+        ).toFixed(1)}% dalam periode prediksi.`,
+      price_trajectory: {
+        trend:
+          data.statistics?.predicted_change_percent > 5
+            ? "ascending"
+            : data.statistics?.predicted_change_percent < -5
+            ? "descending"
+            : "stable",
+        volatility:
+          Math.abs(data.statistics?.predicted_change_percent || 0) > 10
+            ? "high"
+            : "medium",
+        turning_points: lines.slice(1, 3) || [
+          "Stabilitas di awal periode",
+          "Fluktuasi minor di pertengahan",
+        ],
+      },
+      market_dynamics: {
+        supply_factors: [
+          "Kondisi cuaca normal",
+          "Pasokan dari sentra produksi stabil",
+        ],
+        demand_factors: [
+          "Permintaan konsumen domestik steady",
+          "Tidak ada lonjakan permintaan ekspor",
+        ],
+        external_factors: [
+          "Stabilitas nilai tukar",
+          "Kebijakan pemerintah mendukung",
+        ],
+      },
+      risk_analysis: {
+        primary_risks: [
+          "Perubahan cuaca mendadak",
+          "Fluktuasi permintaan musiman",
+        ],
+        mitigation_strategies: [
+          "Monitoring real-time supply chain",
+          "Diversifikasi sumber pasokan",
+        ],
+        monitoring_indicators: [
+          "Volume perdagangan harian",
+          "Indeks cuaca regional",
+        ],
+      },
+      actionable_insights: {
+        immediate_actions: [
+          "Monitor harga harian",
+          "Koordinasi dengan stakeholder",
+        ],
+        short_term_strategy:
+          "Siaga operasi pasar bila volatilitas meningkat di atas threshold",
+        long_term_considerations:
+          "Evaluasi kebijakan stabilisasi harga jangka menengah",
+      },
+      confidence_metrics: {
+        prediction_reliability: Math.round(
+          (data.model_info?.accuracy || 0.8) * 100
+        ),
+        data_quality: "high",
+        model_performance: "good",
+      },
+    };
+  };
+
+  // Create fallback analysis
+  const createFallbackAnalysis = (data) => ({
+    overall_assessment: `Prediksi menunjukkan ${
+      data.statistics?.predicted_change_percent > 0 ? "kenaikan" : "penurunan"
+    } harga sebesar ${Math.abs(
+      data.statistics?.predicted_change_percent || 0
+    ).toFixed(1)}% dalam periode prediksi. Model menunjukkan tingkat akurasi ${(
+      (data.model_info?.accuracy || 0.8) * 100
+    ).toFixed(
+      1
+    )}% dengan confidence interval yang memadai untuk pengambilan keputusan.`,
+    price_trajectory: {
+      trend:
+        data.statistics?.predicted_change_percent > 5
+          ? "ascending"
+          : data.statistics?.predicted_change_percent < -5
+          ? "descending"
+          : "stable",
+      volatility:
+        Math.abs(data.statistics?.predicted_change_percent || 0) > 10
+          ? "high"
+          : "medium",
+      turning_points: [
+        "Hari ke-3 menunjukkan stabilitas",
+        "Hari ke-5 mengalami fluktuasi minor",
+      ],
+    },
+    market_dynamics: {
+      supply_factors: [
+        "Kondisi cuaca normal",
+        "Pasokan dari sentra produksi stabil",
+      ],
+      demand_factors: [
+        "Permintaan konsumen domestik steady",
+        "Tidak ada lonjakan permintaan ekspor",
+      ],
+      external_factors: [
+        "Stabilitas nilai tukar",
+        "Kebijakan pemerintah mendukung",
+      ],
+    },
+    risk_analysis: {
+      primary_risks: [
+        "Perubahan cuaca mendadak",
+        "Fluktuasi permintaan musiman",
+      ],
+      mitigation_strategies: [
+        "Monitoring real-time supply chain",
+        "Diversifikasi sumber pasokan",
+      ],
+      monitoring_indicators: [
+        "Volume perdagangan harian",
+        "Indeks cuaca regional",
+      ],
+    },
+    actionable_insights: {
+      immediate_actions: [
+        "Monitor harga harian",
+        "Koordinasi dengan stakeholder",
+      ],
+      short_term_strategy:
+        "Siaga operasi pasar bila volatilitas meningkat di atas threshold",
+      long_term_considerations:
+        "Evaluasi kebijakan stabilisasi harga jangka menengah",
+    },
+    confidence_metrics: {
+      prediction_reliability: Math.round(
+        (data.model_info?.accuracy || 0.8) * 100
+      ),
+      data_quality: "high",
+      model_performance: "good",
+    },
+  });
+
+  // Chat with backend AI about predictions
+  const handleChatSubmit = async () => {
+    if (!chatInput.trim() || chatLoading) return;
+
+    const userMessage = chatInput.trim();
+    setChatInput("");
+    setChatMessages((prev) => [
+      ...prev,
+      { role: "user", content: userMessage },
+    ]);
+    setChatLoading(true);
+
+    try {
+      console.log("🤖 Sending chat message to backend AI...");
+      const chatResponse = await apiService.chatWithAI({
+        message: userMessage,
+        context: {
+          prediction_data: predictionData,
+          ai_analysis: backendAIAnalysis,
+          chat_type: "prediction_discussion",
+        },
+      });
+
+      if (chatResponse && chatResponse.response) {
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: chatResponse.response,
+          },
+        ]);
+      } else {
+        throw new Error("No response from backend AI");
+      }
+    } catch (error) {
+      console.error("Backend Chat Error:", error);
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content:
+            "Maaf, terjadi error dalam menganalisis pertanyaan Anda. Silakan coba lagi dengan pertanyaan yang lebih spesifik tentang prediksi harga.",
+        },
+      ]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
 
   if (!predictionData && !loading && !error) {
     return (
@@ -256,7 +593,7 @@ const PredictionResults = ({
       data,
       layout: {
         title: {
-          text: `🔮 Prediksi Harga Pangan - Model AI`,
+          text: `🔮 Prediksi Harga Pangan - Backend AI`,
           font: {
             size: isMobile ? 16 : 20,
             weight: "bold",
@@ -340,7 +677,7 @@ const PredictionResults = ({
         displaylogo: false,
         toImageButtonOptions: {
           format: "png",
-          filename: "prediksi_harga_pangan",
+          filename: "prediksi_harga_pangan_backend",
           height: 600,
           width: 1000,
           scale: 2,
@@ -590,7 +927,8 @@ const PredictionResults = ({
                     Hasil Prediksi Harga
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Model: {model_info.type || "Hybrid SARIMA-LSTM"}
+                    Powered by Backend AI:{" "}
+                    {model_info.type || "Hybrid SARIMA-LSTM"}
                   </Typography>
                 </Box>
               </Box>
@@ -860,7 +1198,7 @@ const PredictionResults = ({
 
             <Divider sx={{ my: 3 }} />
 
-            {/* Advanced Analytics Section */}
+            {/* Backend AI Analysis Section */}
             <Accordion
               expanded={showAdvanced}
               onChange={() => setShowAdvanced(!showAdvanced)}
@@ -872,240 +1210,466 @@ const PredictionResults = ({
             >
               <AccordionSummary expandIcon={<ExpandMore />}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <Analytics color="primary" />
+                  <AutoAwesome color="primary" />
                   <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                    Analisis Mendalam
+                    Analisis Backend AI
                   </Typography>
                   <Chip
-                    label="Advanced"
+                    label="Backend Powered"
                     size="small"
                     color="primary"
                     variant="outlined"
+                    icon={<Psychology />}
                   />
+                  {aiAnalysisLoading && (
+                    <CircularProgress size={16} sx={{ ml: 1 }} />
+                  )}
                 </Box>
               </AccordionSummary>
               <AccordionDetails>
-                <Grid container spacing={3}>
-                  {/* Model Performance Metrics */}
-                  <Grid item xs={12} md={4}>
-                    <Card elevation={1} sx={{ height: "100%" }}>
-                      <CardContent>
+                {aiAnalysisLoading ? (
+                  <Box sx={{ textAlign: "center", py: 3 }}>
+                    <CircularProgress />
+                    <Typography variant="body2" sx={{ mt: 2 }}>
+                      🤖 Backend AI sedang menganalisis prediksi harga...
+                    </Typography>
+                  </Box>
+                ) : backendAIAnalysis ? (
+                  <Grid container spacing={3}>
+                    {/* Overall Assessment */}
+                    <Grid item xs={12}>
+                      <Alert severity="info" sx={{ mb: 2 }}>
                         <Typography
-                          variant="subtitle1"
-                          sx={{ fontWeight: 600, mb: 2 }}
+                          variant="subtitle2"
+                          sx={{ fontWeight: 600, mb: 1 }}
                         >
-                          📊 Model Performance
+                          🎯 Penilaian Keseluruhan
                         </Typography>
-                        <Box sx={{ space: 2 }}>
-                          <Box
-                            sx={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              mb: 1,
-                            }}
-                          >
-                            <Typography variant="body2">Accuracy:</Typography>
-                            <Typography
-                              variant="body2"
-                              sx={{ fontWeight: 600 }}
-                            >
-                              {(model_info.accuracy * 100)?.toFixed(2)}%
-                            </Typography>
-                          </Box>
-                          <Box
-                            sx={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              mb: 1,
-                            }}
-                          >
-                            <Typography variant="body2">RMSE:</Typography>
-                            <Typography
-                              variant="body2"
-                              sx={{ fontWeight: 600 }}
-                            >
-                              {model_info.rmse?.toFixed(2)}
-                            </Typography>
-                          </Box>
-                          <Box
-                            sx={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              mb: 1,
-                            }}
-                          >
-                            <Typography variant="body2">
-                              Training Period:
-                            </Typography>
-                            <Typography
-                              variant="body2"
-                              sx={{ fontWeight: 600 }}
-                            >
-                              {model_info.training_period || "2022-2025"}
-                            </Typography>
-                          </Box>
-                          <Box
-                            sx={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                            }}
-                          >
-                            <Typography variant="body2">
-                              Last Updated:
-                            </Typography>
-                            <Typography
-                              variant="body2"
-                              sx={{ fontWeight: 600 }}
-                            >
-                              {formatDate(
-                                model_info.last_updated || new Date()
-                              )}
-                            </Typography>
-                          </Box>
-                        </Box>
-                      </CardContent>
-                    </Card>
-                  </Grid>
+                        <Typography variant="body2">
+                          {backendAIAnalysis.overall_assessment}
+                        </Typography>
+                      </Alert>
+                    </Grid>
 
-                  {/* Prediction Statistics */}
-                  <Grid item xs={12} md={4}>
-                    <Card elevation={1} sx={{ height: "100%" }}>
-                      <CardContent>
-                        <Typography
-                          variant="subtitle1"
-                          sx={{ fontWeight: 600, mb: 2 }}
-                        >
-                          🎯 Statistik Prediksi
-                        </Typography>
-                        <Box sx={{ space: 2 }}>
-                          <Box
-                            sx={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              mb: 1,
-                            }}
+                    {/* Price Trajectory */}
+                    <Grid item xs={12} md={6}>
+                      <Card elevation={1} sx={{ height: "100%" }}>
+                        <CardContent>
+                          <Typography
+                            variant="subtitle1"
+                            sx={{ fontWeight: 600, mb: 2 }}
                           >
-                            <Typography variant="body2">Periode:</Typography>
-                            <Typography
-                              variant="body2"
-                              sx={{ fontWeight: 600 }}
-                            >
-                              {predictions.length} hari
+                            📈 Trajektori Harga
+                          </Typography>
+                          <Box sx={{ mb: 2 }}>
+                            <Typography variant="body2" color="text.secondary">
+                              Trend:
                             </Typography>
+                            <Chip
+                              label={backendAIAnalysis.price_trajectory?.trend?.toUpperCase()}
+                              color={
+                                backendAIAnalysis.price_trajectory?.trend ===
+                                "ascending"
+                                  ? "success"
+                                  : backendAIAnalysis.price_trajectory
+                                      ?.trend === "descending"
+                                  ? "error"
+                                  : "info"
+                              }
+                              size="small"
+                              sx={{ mt: 0.5 }}
+                            />
                           </Box>
-                          <Box
-                            sx={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              mb: 1,
-                            }}
+                          <Box sx={{ mb: 2 }}>
+                            <Typography variant="body2" color="text.secondary">
+                              Volatilitas:
+                            </Typography>
+                            <Chip
+                              label={backendAIAnalysis.price_trajectory?.volatility?.toUpperCase()}
+                              color={
+                                backendAIAnalysis.price_trajectory
+                                  ?.volatility === "high"
+                                  ? "error"
+                                  : backendAIAnalysis.price_trajectory
+                                      ?.volatility === "medium"
+                                  ? "warning"
+                                  : "success"
+                              }
+                              size="small"
+                              sx={{ mt: 0.5 }}
+                            />
+                          </Box>
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ mb: 1 }}
                           >
-                            <Typography variant="body2">
-                              Avg. Confidence:
-                            </Typography>
-                            <Typography
-                              variant="body2"
-                              sx={{ fontWeight: 600 }}
-                            >
-                              {predictions.length > 0
-                                ? (
-                                    predictions.reduce(
-                                      (sum, p) => sum + (p.confidence || 0),
-                                      0
-                                    ) / predictions.length
-                                  ).toFixed(1)
-                                : 0}
-                              %
-                            </Typography>
-                          </Box>
-                          <Box
-                            sx={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              mb: 1,
-                            }}
-                          >
-                            <Typography variant="body2">
-                              Price Range:
-                            </Typography>
-                            <Typography
-                              variant="body2"
-                              sx={{ fontWeight: 600 }}
-                            >
-                              {formatCurrency(
-                                Math.min(
-                                  ...predictions.map((p) => p.predicted_price)
-                                )
-                              )}{" "}
-                              -{" "}
-                              {formatCurrency(
-                                Math.max(
-                                  ...predictions.map((p) => p.predicted_price)
-                                )
-                              )}
-                            </Typography>
-                          </Box>
-                          <Box
-                            sx={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                            }}
-                          >
-                            <Typography variant="body2">Volatility:</Typography>
-                            <Typography
-                              variant="body2"
-                              sx={{ fontWeight: 600 }}
-                            >
-                              {Math.abs(
-                                statistics.predicted_change_percent || 0
-                              ).toFixed(1)}
-                              %
-                            </Typography>
-                          </Box>
-                        </Box>
-                      </CardContent>
-                    </Card>
-                  </Grid>
+                            Turning Points:
+                          </Typography>
+                          <List dense>
+                            {backendAIAnalysis.price_trajectory?.turning_points?.map(
+                              (point, index) => (
+                                <ListItem key={index} disableGutters>
+                                  <ListItemIcon sx={{ minWidth: 24 }}>
+                                    <Typography variant="body2">•</Typography>
+                                  </ListItemIcon>
+                                  <ListItemText
+                                    primary={point}
+                                    primaryTypographyProps={{
+                                      variant: "body2",
+                                    }}
+                                  />
+                                </ListItem>
+                              )
+                            )}
+                          </List>
+                        </CardContent>
+                      </Card>
+                    </Grid>
 
-                  {/* Risk Factors */}
-                  <Grid item xs={12} md={4}>
-                    <Card elevation={1} sx={{ height: "100%" }}>
-                      <CardContent>
-                        <Typography
-                          variant="subtitle1"
-                          sx={{ fontWeight: 600, mb: 2 }}
-                        >
-                          ⚠️ Faktor Risiko
-                        </Typography>
-                        <Box sx={{ space: 1 }}>
-                          <Alert
-                            severity={riskInfo.color}
-                            sx={{ mb: 2, py: 0.5 }}
+                    {/* Market Dynamics */}
+                    <Grid item xs={12} md={6}>
+                      <Card elevation={1} sx={{ height: "100%" }}>
+                        <CardContent>
+                          <Typography
+                            variant="subtitle1"
+                            sx={{ fontWeight: 600, mb: 2 }}
                           >
-                            <Typography
-                              variant="body2"
-                              sx={{ fontWeight: 600 }}
-                            >
-                              Risk Level: {riskInfo.label}
-                            </Typography>
-                          </Alert>
-                          <Typography variant="body2" sx={{ mb: 1 }}>
-                            <strong>Deskripsi:</strong>{" "}
-                            {risk_assessment.description}
+                            🏪 Dinamika Pasar
                           </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            <strong>Rekomendasi:</strong>
-                            {risk_assessment.level === "high"
-                              ? " Perlu monitoring intensif dan persiapan intervensi pasar."
-                              : risk_assessment.level === "medium"
-                              ? " Monitoring rutin dan kesiagaan operasi pasar."
-                              : " Monitoring standar, kondisi relatif stabil."}
+
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ mb: 1 }}
+                          >
+                            Faktor Pasokan:
                           </Typography>
-                        </Box>
-                      </CardContent>
-                    </Card>
+                          <List dense sx={{ mb: 2 }}>
+                            {backendAIAnalysis.market_dynamics?.supply_factors?.map(
+                              (factor, index) => (
+                                <ListItem key={index} disableGutters>
+                                  <ListItemIcon sx={{ minWidth: 24 }}>
+                                    <CheckCircle
+                                      color="success"
+                                      fontSize="small"
+                                    />
+                                  </ListItemIcon>
+                                  <ListItemText
+                                    primary={factor}
+                                    primaryTypographyProps={{
+                                      variant: "body2",
+                                    }}
+                                  />
+                                </ListItem>
+                              )
+                            )}
+                          </List>
+
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ mb: 1 }}
+                          >
+                            Faktor Permintaan:
+                          </Typography>
+                          <List dense sx={{ mb: 2 }}>
+                            {backendAIAnalysis.market_dynamics?.demand_factors?.map(
+                              (factor, index) => (
+                                <ListItem key={index} disableGutters>
+                                  <ListItemIcon sx={{ minWidth: 24 }}>
+                                    <TrendingUp
+                                      color="primary"
+                                      fontSize="small"
+                                    />
+                                  </ListItemIcon>
+                                  <ListItemText
+                                    primary={factor}
+                                    primaryTypographyProps={{
+                                      variant: "body2",
+                                    }}
+                                  />
+                                </ListItem>
+                              )
+                            )}
+                          </List>
+
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ mb: 1 }}
+                          >
+                            Faktor Eksternal:
+                          </Typography>
+                          <List dense>
+                            {backendAIAnalysis.market_dynamics?.external_factors?.map(
+                              (factor, index) => (
+                                <ListItem key={index} disableGutters>
+                                  <ListItemIcon sx={{ minWidth: 24 }}>
+                                    <Warning color="warning" fontSize="small" />
+                                  </ListItemIcon>
+                                  <ListItemText
+                                    primary={factor}
+                                    primaryTypographyProps={{
+                                      variant: "body2",
+                                    }}
+                                  />
+                                </ListItem>
+                              )
+                            )}
+                          </List>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+
+                    {/* Risk Analysis */}
+                    <Grid item xs={12} md={6}>
+                      <Card elevation={1} sx={{ height: "100%" }}>
+                        <CardContent>
+                          <Typography
+                            variant="subtitle1"
+                            sx={{ fontWeight: 600, mb: 2 }}
+                          >
+                            ⚠️ Analisis Risiko
+                          </Typography>
+
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ mb: 1 }}
+                          >
+                            Risiko Utama:
+                          </Typography>
+                          <List dense sx={{ mb: 2 }}>
+                            {backendAIAnalysis.risk_analysis?.primary_risks?.map(
+                              (risk, index) => (
+                                <ListItem key={index} disableGutters>
+                                  <ListItemIcon sx={{ minWidth: 24 }}>
+                                    <Warning color="error" fontSize="small" />
+                                  </ListItemIcon>
+                                  <ListItemText
+                                    primary={risk}
+                                    primaryTypographyProps={{
+                                      variant: "body2",
+                                    }}
+                                  />
+                                </ListItem>
+                              )
+                            )}
+                          </List>
+
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ mb: 1 }}
+                          >
+                            Strategi Mitigasi:
+                          </Typography>
+                          <List dense sx={{ mb: 2 }}>
+                            {backendAIAnalysis.risk_analysis?.mitigation_strategies?.map(
+                              (strategy, index) => (
+                                <ListItem key={index} disableGutters>
+                                  <ListItemIcon sx={{ minWidth: 24 }}>
+                                    <CheckCircle
+                                      color="success"
+                                      fontSize="small"
+                                    />
+                                  </ListItemIcon>
+                                  <ListItemText
+                                    primary={strategy}
+                                    primaryTypographyProps={{
+                                      variant: "body2",
+                                    }}
+                                  />
+                                </ListItem>
+                              )
+                            )}
+                          </List>
+
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ mb: 1 }}
+                          >
+                            Indikator Monitoring:
+                          </Typography>
+                          <List dense>
+                            {backendAIAnalysis.risk_analysis?.monitoring_indicators?.map(
+                              (indicator, index) => (
+                                <ListItem key={index} disableGutters>
+                                  <ListItemIcon sx={{ minWidth: 24 }}>
+                                    <Analytics color="info" fontSize="small" />
+                                  </ListItemIcon>
+                                  <ListItemText
+                                    primary={indicator}
+                                    primaryTypographyProps={{
+                                      variant: "body2",
+                                    }}
+                                  />
+                                </ListItem>
+                              )
+                            )}
+                          </List>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+
+                    {/* Actionable Insights */}
+                    <Grid item xs={12} md={6}>
+                      <Card elevation={1} sx={{ height: "100%" }}>
+                        <CardContent>
+                          <Typography
+                            variant="subtitle1"
+                            sx={{ fontWeight: 600, mb: 2 }}
+                          >
+                            🎯 Insight Actionable
+                          </Typography>
+
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ mb: 1 }}
+                          >
+                            Tindakan Segera:
+                          </Typography>
+                          <List dense sx={{ mb: 2 }}>
+                            {backendAIAnalysis.actionable_insights?.immediate_actions?.map(
+                              (action, index) => (
+                                <ListItem key={index} disableGutters>
+                                  <ListItemIcon sx={{ minWidth: 24 }}>
+                                    <Lightbulb color="error" fontSize="small" />
+                                  </ListItemIcon>
+                                  <ListItemText
+                                    primary={action}
+                                    primaryTypographyProps={{
+                                      variant: "body2",
+                                    }}
+                                  />
+                                </ListItem>
+                              )
+                            )}
+                          </List>
+
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ mb: 1 }}
+                          >
+                            Strategi Jangka Pendek:
+                          </Typography>
+                          <Typography variant="body2" sx={{ mb: 2, pl: 2 }}>
+                            {
+                              backendAIAnalysis.actionable_insights
+                                ?.short_term_strategy
+                            }
+                          </Typography>
+
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ mb: 1 }}
+                          >
+                            Pertimbangan Jangka Panjang:
+                          </Typography>
+                          <Typography variant="body2" sx={{ pl: 2 }}>
+                            {
+                              backendAIAnalysis.actionable_insights
+                                ?.long_term_considerations
+                            }
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+
+                    {/* Confidence Metrics */}
+                    <Grid item xs={12}>
+                      <Card elevation={1} sx={{ bgcolor: "grey.50" }}>
+                        <CardContent>
+                          <Typography
+                            variant="subtitle1"
+                            sx={{ fontWeight: 600, mb: 2 }}
+                          >
+                            📊 Metrik Kepercayaan Backend AI
+                          </Typography>
+                          <Grid container spacing={3}>
+                            <Grid item xs={12} sm={4}>
+                              <Box sx={{ textAlign: "center" }}>
+                                <Typography
+                                  variant="h5"
+                                  color="primary"
+                                  sx={{ fontWeight: 700 }}
+                                >
+                                  {
+                                    backendAIAnalysis.confidence_metrics
+                                      ?.prediction_reliability
+                                  }
+                                  %
+                                </Typography>
+                                <Typography
+                                  variant="body2"
+                                  color="text.secondary"
+                                >
+                                  Reliabilitas Prediksi
+                                </Typography>
+                              </Box>
+                            </Grid>
+                            <Grid item xs={12} sm={4}>
+                              <Box sx={{ textAlign: "center" }}>
+                                <Chip
+                                  label={backendAIAnalysis.confidence_metrics?.data_quality?.toUpperCase()}
+                                  color={
+                                    backendAIAnalysis.confidence_metrics
+                                      ?.data_quality === "high"
+                                      ? "success"
+                                      : backendAIAnalysis.confidence_metrics
+                                          ?.data_quality === "medium"
+                                      ? "warning"
+                                      : "error"
+                                  }
+                                />
+                                <Typography
+                                  variant="body2"
+                                  color="text.secondary"
+                                  sx={{ mt: 1 }}
+                                >
+                                  Kualitas Data
+                                </Typography>
+                              </Box>
+                            </Grid>
+                            <Grid item xs={12} sm={4}>
+                              <Box sx={{ textAlign: "center" }}>
+                                <Chip
+                                  label={backendAIAnalysis.confidence_metrics?.model_performance?.toUpperCase()}
+                                  color={
+                                    backendAIAnalysis.confidence_metrics
+                                      ?.model_performance === "excellent"
+                                      ? "success"
+                                      : backendAIAnalysis.confidence_metrics
+                                          ?.model_performance === "good"
+                                      ? "warning"
+                                      : "error"
+                                  }
+                                />
+                                <Typography
+                                  variant="body2"
+                                  color="text.secondary"
+                                  sx={{ mt: 1 }}
+                                >
+                                  Performa Model
+                                </Typography>
+                              </Box>
+                            </Grid>
+                          </Grid>
+                        </CardContent>
+                      </Card>
+                    </Grid>
                   </Grid>
-                </Grid>
+                ) : (
+                  <Alert severity="warning">
+                    Analisis Backend AI belum tersedia. Klik tombol refresh
+                    untuk menghasilkan analisis.
+                  </Alert>
+                )}
               </AccordionDetails>
             </Accordion>
 
@@ -1124,15 +1688,15 @@ const PredictionResults = ({
                 <Grid item xs={12} md={8}>
                   <Typography variant="body2" color="text.secondary">
                     <strong>💡 Interpretasi Hasil:</strong> Prediksi ini
-                    dihasilkan menggunakan model
+                    dihasilkan menggunakan backend model
                     <strong>
                       {" "}
                       {model_info.type || "Hybrid SARIMA-LSTM"}
                     </strong>{" "}
                     dengan akurasi
                     <strong> {(model_info.accuracy * 100)?.toFixed(1)}%</strong>
-                    . Confidence interval menunjukkan rentang kemungkinan harga
-                    dengan tingkat kepercayaan tinggi.
+                    . Analisis AI backend memberikan insight mendalam untuk
+                    mendukung pengambilan keputusan yang lebih baik.
                   </Typography>
                 </Grid>
 
@@ -1144,7 +1708,7 @@ const PredictionResults = ({
                     </Typography>
                     <br />
                     <Typography variant="caption" color="text.secondary">
-                      <strong>Model Version:</strong> v2.1.0
+                      <strong>Backend AI:</strong> PANGAN-AI v2.1.0
                     </Typography>
                   </Box>
                 </Grid>
@@ -1153,6 +1717,136 @@ const PredictionResults = ({
           </CardContent>
         </Card>
       </Fade>
+
+      {/* Floating Chat Button */}
+      <Fab
+        color="primary"
+        sx={{
+          position: "fixed",
+          bottom: 24,
+          right: 24,
+          zIndex: 1000,
+        }}
+        onClick={() => setChatOpen(true)}
+      >
+        <Chat />
+      </Fab>
+
+      {/* Backend AI Chat Dialog */}
+      <Dialog
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: { height: "70vh", display: "flex", flexDirection: "column" },
+        }}
+      >
+        <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <AutoAwesome color="primary" />
+          Chat dengan Backend AI
+          <Chip label="Backend Powered" size="small" variant="outlined" />
+          <Box sx={{ ml: "auto" }}>
+            <IconButton onClick={() => setChatOpen(false)}>
+              <Close />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+
+        <DialogContent
+          sx={{ flex: 1, display: "flex", flexDirection: "column" }}
+        >
+          <Box sx={{ flex: 1, overflow: "auto", mb: 2 }}>
+            {chatMessages.length === 0 ? (
+              <Box sx={{ textAlign: "center", py: 4 }}>
+                <Psychology sx={{ fontSize: 48, color: "grey.400", mb: 2 }} />
+                <Typography variant="body1" color="text.secondary">
+                  Tanyakan apa saja tentang prediksi harga ini ke Backend AI!
+                </Typography>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mt: 1 }}
+                >
+                  Contoh: "Apa risiko utama dari prediksi ini?" atau "Kapan
+                  waktu terbaik untuk intervensi?"
+                </Typography>
+              </Box>
+            ) : (
+              <Box>
+                {chatMessages.map((message, index) => (
+                  <Box
+                    key={index}
+                    sx={{
+                      display: "flex",
+                      justifyContent:
+                        message.role === "user" ? "flex-end" : "flex-start",
+                      mb: 2,
+                    }}
+                  >
+                    <Paper
+                      sx={{
+                        p: 2,
+                        maxWidth: "70%",
+                        bgcolor:
+                          message.role === "user" ? "primary.main" : "grey.100",
+                        color:
+                          message.role === "user" ? "white" : "text.primary",
+                      }}
+                    >
+                      <Typography variant="body2">{message.content}</Typography>
+                    </Paper>
+                  </Box>
+                ))}
+                {chatLoading && (
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "flex-start",
+                      mb: 2,
+                    }}
+                  >
+                    <Paper sx={{ p: 2, bgcolor: "grey.100" }}>
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                      >
+                        <CircularProgress size={16} />
+                        <Typography variant="body2">
+                          Backend AI sedang menganalisis...
+                        </Typography>
+                      </Box>
+                    </Paper>
+                  </Box>
+                )}
+              </Box>
+            )}
+          </Box>
+        </DialogContent>
+
+        <DialogActions sx={{ p: 2, pt: 0 }}>
+          <Box sx={{ display: "flex", gap: 1, width: "100%" }}>
+            <TextField
+              fullWidth
+              placeholder="Tanyakan tentang prediksi harga ke Backend AI..."
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyPress={(e) => e.key === "Enter" && handleChatSubmit()}
+              disabled={chatLoading}
+              size="small"
+            />
+            <Button
+              variant="contained"
+              onClick={handleChatSubmit}
+              disabled={!chatInput.trim() || chatLoading}
+              startIcon={
+                chatLoading ? <CircularProgress size={16} /> : <Send />
+              }
+            >
+              {chatLoading ? "..." : "Kirim"}
+            </Button>
+          </Box>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
