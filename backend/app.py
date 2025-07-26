@@ -172,7 +172,7 @@ async def get_commodities_fallback():
     else:
         return {
             "success": True,
-            "commodities": ["Cabai Rawit Merah", "Cabai Merah Keriting", "Bawang Merah"],
+            "commodities": ["Cabai Rawit Merah"],
             "count": 3,
             "fallback": True,
             "message": "Using mock data - services not loaded"

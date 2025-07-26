@@ -53,8 +53,6 @@ const FilterPanel = ({
   const commodities = [
     { value: "all", label: "Semua Komoditas" },
     { value: "Cabai Rawit Merah", label: "Cabai Rawit Merah" },
-    { value: "Bawang Merah", label: "Bawang Merah" },
-    { value: "Cabai Merah Keriting", label: "Cabai Merah Keriting" },
   ];
 
   const regions = [

@@ -1,5 +1,5 @@
 // File: frontend/src/services/api.js
-// FIXED VERSION - Perbaikan parameter mapping
+// FINAL FIXED VERSION - Compatible dengan AIChat.js
 
 import axios from "axios";
 
@@ -190,7 +190,27 @@ const apiService = {
     }
   },
 
-  // ===== AI ENDPOINTS =====
+  // ===== AI ENDPOINTS - ADDED MISSING METHODS =====
+
+  // FIXED: Added getAIStatus method yang missing
+  async getAIStatus() {
+    try {
+      const response = await apiClient.get("/api/ai/status");
+      return response.data;
+    } catch (error) {
+      console.error("Error getting AI status:", error);
+      return {
+        success: false,
+        error: error.message,
+        ai_status: {
+          openai_configured: false,
+          service_health: "unavailable",
+          model: "unknown",
+        },
+      };
+    }
+  },
+
   async generateInsights(predictionData) {
     try {
       console.log("🤖 Requesting AI insights for:", predictionData);
@@ -228,28 +248,63 @@ const apiService = {
     }
   },
 
-  async chatWithAI(messages, context = {}) {
+  // FIXED: chatWithAI method - compatible dengan AIChat.js format
+  async chatWithAI(data) {
     try {
-      console.log("💬 Sending chat request:", { messages, context });
+      console.log("💬 Sending chat request:", data);
 
-      const response = await apiClient.post("/api/ai/chat", {
-        messages,
-        context,
-        max_tokens: 1000,
-        temperature: 0.7,
-      });
+      // Handle different input formats untuk backward compatibility
+      let requestData;
+
+      if (data.message) {
+        // New format from AIChat.js
+        requestData = {
+          message: data.message,
+          context: data.context || {},
+          conversation_id: data.conversation_id || null,
+        };
+      } else {
+        // Legacy format (messages, context)
+        requestData = {
+          messages: data,
+          context: arguments[1] || {},
+          max_tokens: 1000,
+          temperature: 0.7,
+        };
+      }
+
+      console.log("💬 Formatted request:", requestData);
+
+      const response = await apiClient.post("/api/ai/chat", requestData);
 
       console.log("💬 Chat response:", response.data);
       return response.data;
     } catch (error) {
       console.error("❌ Chat error:", error);
 
+      // Enhanced error handling untuk 422 errors
+      if (error.response?.status === 422) {
+        const detail = error.response.data?.detail;
+        let errorMessage = "Invalid request format";
+
+        if (Array.isArray(detail)) {
+          errorMessage = detail
+            .map((err) => `${err.loc?.join(".")} - ${err.msg}`)
+            .join("; ");
+        } else if (typeof detail === "string") {
+          errorMessage = detail;
+        }
+
+        throw new Error(`Backend validation error: ${errorMessage}`);
+      }
+
       // Fallback response untuk demo
       return {
-        success: true,
+        success: false,
+        error: error.message,
         response:
-          "Maaf, saya sedang mengalami gangguan. Silakan coba lagi nanti.",
-        conversation_id: Date.now().toString(),
+          "Maaf, AI Assistant sedang mengalami gangguan. Silakan coba lagi nanti.",
+        conversation_id: data.conversation_id || Date.now().toString(),
       };
     }
   },
@@ -262,6 +317,67 @@ const apiService = {
     } catch (error) {
       console.error("Health check failed:", error);
       return { status: "error", message: "Service unavailable" };
+    }
+  },
+
+  // ADDED: Test connection method untuk comprehensive testing
+  async testConnection() {
+    try {
+      const health = await this.healthCheck();
+      const aiStatus = await this.getAIStatus();
+
+      return {
+        success: true,
+        api_healthy: !!health.status,
+        ai_ready: aiStatus.success || false,
+        backend_version: health.version || "unknown",
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      return {
+        success: false,
+        api_healthy: false,
+        ai_ready: false,
+        error: error.message,
+        timestamp: new Date().toISOString(),
+      };
+    }
+  },
+
+  // ADDED: Check all services status
+  async checkAllServices() {
+    try {
+      const [health, aiStatus] = await Promise.allSettled([
+        this.healthCheck(),
+        this.getAIStatus(),
+      ]);
+
+      return {
+        success: true,
+        services: {
+          backend: {
+            status: health.status === "fulfilled" ? "healthy" : "unhealthy",
+            data: health.status === "fulfilled" ? health.value : null,
+            error: health.status === "rejected" ? health.reason.message : null,
+          },
+          ai: {
+            status:
+              aiStatus.status === "fulfilled" && aiStatus.value.success
+                ? "ready"
+                : "not_ready",
+            data: aiStatus.status === "fulfilled" ? aiStatus.value : null,
+            error:
+              aiStatus.status === "rejected" ? aiStatus.reason.message : null,
+          },
+        },
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message,
+        timestamp: new Date().toISOString(),
+      };
     }
   },
 
@@ -297,5 +413,16 @@ const apiService = {
     }
   },
 };
+
+// EXPORT individual functions untuk compatibility
+export const chatWithAI = (message, context, conversationId) => {
+  return apiService.chatWithAI({
+    message,
+    context,
+    conversation_id: conversationId,
+  });
+};
+
+export const getAIStatus = apiService.getAIStatus.bind(apiService);
 
 export default apiService;

@@ -41,12 +41,7 @@ const NewPredictionPage = () => {
   // const [viewMode, setViewMode] = useState("chart"); // "chart" or "table"
 
   // Options
-  const commodityOptions = [
-    "Cabai Rawit Merah",
-    "Cabai Merah Keriting",
-    "Bawang Merah",
-    "Bawang Putih",
-  ];
+  const commodityOptions = ["Cabai Rawit Merah"];
 
   const regionOptions = [
     "Kabupaten Bogor",
