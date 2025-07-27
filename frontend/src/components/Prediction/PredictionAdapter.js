@@ -1343,7 +1343,7 @@ const PredictionAdapter = ({
         </Grid>
 
         {/* Confidence Metrics */}
-        <Grid item xs={12}>
+        {/* <Grid item xs={12}>
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom>
@@ -1379,7 +1379,7 @@ const PredictionAdapter = ({
               </Grid>
             </CardContent>
           </Card>
-        </Grid>
+        </Grid> */}
       </Grid>
     );
   };
