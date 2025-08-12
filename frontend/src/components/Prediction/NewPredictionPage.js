@@ -60,7 +60,7 @@ const NewPredictionPage = () => {
       console.log("🚀 Starting prediction request...");
 
       // Direct API call untuk prediksi
-      const response = await axios.post("http://localhost:8000/api/predict/", {
+      const response = await axios.post("/api/predict/", {
         commodity: commodity,
         region: region,
         days_ahead: predictionDays,

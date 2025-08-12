@@ -232,7 +232,7 @@ Tidak dapat terhubung ke server AI.
 
 **Periksa:**
 • Koneksi internet Anda
-• Status backend server (http://localhost:8000)
+• Status backend server (/api)
 • Firewall atau proxy settings
 
 **Error detail:** ${err.message}`;

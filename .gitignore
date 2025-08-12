@@ -27,3 +27,11 @@ __pycache__/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+.env
+*.env
+*.env.*
+__pycache__/
+node_modules/
+*.log
+venv/
+build/
